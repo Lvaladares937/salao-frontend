@@ -255,102 +255,114 @@ export const useAgendamentos = () => {
     setShowModal(true);
   };
 
-  // Função para salvar agendamento (ORIGINAL)
+  // Função para salvar agendamento
   const salvarAgendamento = async (dadosPagamento) => {
-    console.log('📝 Salvando agendamento:', formData);
-    
-    if (!formData.clienteId || !formData.profissionalId || !formData.servicoId) {
-      alert('Preencha todos os campos obrigatórios');
+  console.log('📝 Salvando agendamento:', formData);
+  console.log('📝 Status atual:', formData.status);
+  
+  if (!formData.clienteId || !formData.profissionalId || !formData.servicoId) {
+    alert('Preencha todos os campos obrigatórios');
+    return;
+  }
+
+  const cliente = clientes.find(c => c.id === parseInt(formData.clienteId));
+  const profissional = funcionarios.find(f => f.id === parseInt(formData.profissionalId));
+  const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
+
+  if (!cliente) {
+    alert(`Cliente ID ${formData.clienteId} não encontrado`);
+    return;
+  }
+  
+  if (!profissional) {
+    alert(`Profissional ID ${formData.profissionalId} não encontrado`);
+    return;
+  }
+  
+  if (!servico) {
+    alert(`Serviço ID ${formData.servicoId} não encontrado`);
+    return;
+  }
+
+  if (isFuncionario && agendamentoSelecionado) {
+    if (agendamentoSelecionado.funcionario_id !== usuario?.funcionarioId) {
+      alert('Você só pode editar seus próprios agendamentos!');
       return;
     }
+  }
 
-    const cliente = clientes.find(c => c.id === parseInt(formData.clienteId));
-    const profissional = funcionarios.find(f => f.id === parseInt(formData.profissionalId));
-    const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
+  const percentualComissao = calcularComissaoServico(servico, profissional);
+  const valorComissao = servico.preco * (percentualComissao / 100);
+  
+  const dataHora = `${formData.data}T${formData.hora}:00`;
 
-    if (!cliente) {
-      alert(`Cliente ID ${formData.clienteId} não encontrado`);
-      return;
-    }
-    
-    if (!profissional) {
-      alert(`Profissional ID ${formData.profissionalId} não encontrado`);
-      return;
-    }
-    
-    if (!servico) {
-      alert(`Serviço ID ${formData.servicoId} não encontrado`);
-      return;
-    }
-
-    if (isFuncionario && agendamentoSelecionado) {
-      if (agendamentoSelecionado.funcionario_id !== usuario?.funcionarioId) {
-        alert('Você só pode editar seus próprios agendamentos!');
-        return;
-      }
-    }
-
-    const percentualComissao = calcularComissaoServico(servico, profissional);
-    const valorComissao = servico.preco * (percentualComissao / 100);
-    
-    const dataHora = `${formData.data}T${formData.hora}:00`;
-
-    const agendamentoData = {
-      cliente_id: parseInt(formData.clienteId),
-      funcionario_id: parseInt(formData.profissionalId),
-      servico_id: parseInt(formData.servicoId),
-      data_hora: dataHora,
-      status: formData.status,
-      observacoes: formData.observacoes || '',
-      valor: servico.preco,
-      valor_comissao: valorComissao,
-      percentual_comissao: percentualComissao,
-      ...(dadosPagamento && {
-        forma_pagamento: dadosPagamento.forma_pagamento,
-        bandeira_cartao: dadosPagamento.bandeira_cartao,
-        parcelas: dadosPagamento.parcelas,
-        data_pagamento: dadosPagamento.data_pagamento
-      })
-    };
-
-    try {
-      if (agendamentoSelecionado) {
-        await agendamentosService.atualizar(agendamentoSelecionado.id, agendamentoData);
-        
-        const evento = new CustomEvent('agendamentoAtualizado', { 
-          detail: { tipo: 'edicao', agendamento: agendamentoData }
-        });
-        window.dispatchEvent(evento);
-        
-        alert('Agendamento atualizado com sucesso!');
-      } else {
-        const result = await agendamentosService.criar(agendamentoData);
-        
-        const evento = new CustomEvent('novoAgendamento', { 
-          detail: { 
-            venda: {
-              funcionarioId: profissional.id,
-              funcionario: profissional.nome,
-              data: formData.data,
-              valor: servico.preco,
-              servico: servico.nome,
-              comissao: valorComissao
-            }
-          }
-        });
-        window.dispatchEvent(evento);
-        
-        alert('Agendamento criado com sucesso!');
-      }
-      
-      await carregarAgendamentos();
-      setShowModal(false);
-    } catch (error) {
-      console.error('❌ Erro ao salvar agendamento:', error);
-      const errorMsg = error.response?.data?.error || error.message;
-      alert('Erro ao salvar agendamento: ' + errorMsg);
-    }
+  const agendamentoData = {
+    cliente_id: parseInt(formData.clienteId),
+    funcionario_id: parseInt(formData.profissionalId),
+    servico_id: parseInt(formData.servicoId),
+    data_hora: dataHora,
+    status: formData.status,
+    observacoes: formData.observacoes || '',
+    valor: servico.preco,
+    valor_comissao: valorComissao,
+    percentual_comissao: percentualComissao,
+    ...(dadosPagamento && {
+      forma_pagamento: dadosPagamento.forma_pagamento,
+      bandeira_cartao: dadosPagamento.bandeira_cartao,
+      parcelas: dadosPagamento.parcelas,
+      data_pagamento: dadosPagamento.data_pagamento
+    })
   };
+
+  console.log('📤 Enviando para API:', agendamentoData);
+
+  try {
+    let resultado;
+    if (agendamentoSelecionado) {
+      console.log(`✏️ Atualizando agendamento ID: ${agendamentoSelecionado.id}`);
+      resultado = await agendamentosService.atualizar(agendamentoSelecionado.id, agendamentoData);
+      console.log('✅ Atualizado com sucesso:', resultado);
+      
+      const evento = new CustomEvent('agendamentoAtualizado', { 
+        detail: { tipo: 'edicao', agendamento: agendamentoData }
+      });
+      window.dispatchEvent(evento);
+      
+      alert('Agendamento atualizado com sucesso!');
+    } else {
+      console.log('➕ Criando novo agendamento');
+      resultado = await agendamentosService.criar(agendamentoData);
+      console.log('✅ Criado com sucesso:', resultado);
+      
+      const evento = new CustomEvent('novoAgendamento', { 
+        detail: { 
+          venda: {
+            funcionarioId: profissional.id,
+            funcionario: profissional.nome,
+            data: formData.data,
+            valor: servico.preco,
+            servico: servico.nome,
+            comissao: valorComissao
+          }
+        }
+      });
+      window.dispatchEvent(evento);
+      
+      alert('Agendamento criado com sucesso!');
+    }
+    
+    // Recarregar os agendamentos
+    console.log('🔄 Recarregando agendamentos...');
+    await carregarAgendamentos();
+    console.log('✅ Agendamentos recarregados');
+    
+    setShowModal(false);
+  } catch (error) {
+    console.error('❌ Erro ao salvar agendamento:', error);
+    const errorMsg = error.response?.data?.error || error.message;
+    alert('Erro ao salvar agendamento: ' + errorMsg);
+  }
+};
 
   // Função para excluir agendamento
   const excluirAgendamento = async (id) => {
