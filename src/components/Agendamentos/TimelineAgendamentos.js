@@ -34,7 +34,8 @@ const TimelineAgendamentos = ({
       funcionarioId: usuario?.funcionarioId,
       nome: usuario?.nome 
     });
-  }, [profissionais, isFuncionario, usuario]);
+    console.log('📅 Timeline - Agendamentos recebidos:', agendamentos?.length);
+  }, [profissionais, isFuncionario, usuario, agendamentos]);
 
   // FILTRO DE PROFISSIONAIS - FORÇADO para funcionário
   const profissionaisFiltrados = React.useMemo(() => {
@@ -58,13 +59,18 @@ const TimelineAgendamentos = ({
     return numero.toFixed(2).replace('.', ',');
   };
 
-  // Aplicar filtros nos agendamentos
+  // Aplicar filtros nos agendamentos (SEM FILTRO DE DATA, pois o hook já fez)
   const agendamentosFiltrados = React.useMemo(() => {
     if (!agendamentos) return [];
     
+    console.log('🔍 Timeline - Filtrando agendamentos:', {
+      total: agendamentos.length,
+      isFuncionario,
+      filtroProfissional,
+      filtroServico
+    });
+    
     return agendamentos.filter(ag => {
-      if (!isSameDay(new Date(ag.data_hora), dataSelecionada)) return false;
-      
       // Se for funcionário, mostra SÓ os dele
       if (isFuncionario && usuario?.funcionarioId) {
         return ag.funcionario_id === usuario.funcionarioId;
@@ -79,7 +85,20 @@ const TimelineAgendamentos = ({
       }
       return true;
     });
-  }, [agendamentos, dataSelecionada, isFuncionario, usuario, filtroProfissional, filtroServico]);
+  }, [agendamentos, isFuncionario, usuario, filtroProfissional, filtroServico]);
+
+  // Log dos agendamentos após filtros
+  useEffect(() => {
+    console.log('✅ Timeline - Agendamentos após filtros:', {
+      total: agendamentosFiltrados.length,
+      detalhes: agendamentosFiltrados.map(a => ({
+        id: a.id,
+        data_hora: a.data_hora,
+        profissional: a.funcionario_nome,
+        servico: a.servico_nome
+      }))
+    });
+  }, [agendamentosFiltrados]);
 
   // Usar horários das configurações ou fallback
   const horarios = React.useMemo(() => {
