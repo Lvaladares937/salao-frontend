@@ -12,8 +12,7 @@ const ModalAgendamento = ({
   onExcluir,
   profissionais,
   servicos,
-  clientes,
-  agendamentosExistentes = []
+  clientes
 }) => {
   const { horariosDisponiveis, loading, config } = useConfiguracoesHorarios();
   
@@ -28,9 +27,8 @@ const ModalAgendamento = ({
   const [parcelas, setParcelas] = useState(1);
   const [pagamentoRegistrado, setPagamentoRegistrado] = useState(false);
   const [horariosDoDia, setHorariosDoDia] = useState([]);
-  const [salvando, setSalvando] = useState(false);
   
-  // States para busca de cliente
+  // NOVOS STATES PARA BUSCA DE CLIENTE
   const [buscaCliente, setBuscaCliente] = useState('');
   const [mostrarDropdownCliente, setMostrarDropdownCliente] = useState(false);
   const [clientesFiltrados, setClientesFiltrados] = useState([]);
@@ -69,7 +67,7 @@ const ModalAgendamento = ({
     { id: 'fiado', nome: 'Fiado (Crediário)' }
   ];
 
-  // Filtrar clientes baseado na busca
+  // FILTRO DE CLIENTES - ADICIONADO
   useEffect(() => {
     if (!clientes) return;
     
@@ -78,14 +76,13 @@ const ModalAgendamento = ({
     } else {
       const filtrados = clientes.filter(cliente => 
         cliente.nome?.toLowerCase().includes(buscaCliente.toLowerCase()) ||
-        (cliente.telefone && cliente.telefone.includes(buscaCliente)) ||
-        (cliente.email && cliente.email.toLowerCase().includes(buscaCliente.toLowerCase()))
+        (cliente.telefone && cliente.telefone.includes(buscaCliente))
       );
       setClientesFiltrados(filtrados.slice(0, 50));
     }
   }, [buscaCliente, clientes]);
 
-  // Carregar cliente quando editar
+  // CARREGAR CLIENTE QUANDO EDITAR - ADICIONADO
   useEffect(() => {
     if (agendamentoSelecionado && agendamentoSelecionado.cliente_id && clientes.length > 0) {
       const clienteEncontrado = clientes.find(c => c.id === agendamentoSelecionado.cliente_id);
@@ -97,7 +94,7 @@ const ModalAgendamento = ({
     }
   }, [agendamentoSelecionado, clientes]);
 
-  // Resetar busca quando fechar modal
+  // RESETAR BUSCA QUANDO FECHAR MODAL - ADICIONADO
   useEffect(() => {
     if (!show) {
       setBuscaCliente('');
@@ -105,39 +102,14 @@ const ModalAgendamento = ({
     }
   }, [show]);
 
-  // Gerar horários disponíveis baseados nas configurações e agendamentos existentes
+  // Gerar horários disponíveis baseados nas configurações
   useEffect(() => {
-    if (formData.data && formData.profissionalId && horariosDisponiveis.length > 0) {
-      const agendamentosDoDia = agendamentosExistentes.filter(ag => {
-        const dataAgendamento = ag.data_hora?.split(' ')[0];
-        const profissionalId = ag.profissional_id || ag.profissionalId;
-        return dataAgendamento === formData.data && 
-               profissionalId === parseInt(formData.profissionalId);
-      });
-      
-      const horariosOcupados = agendamentosDoDia.map(ag => {
-        const horaCompleta = ag.data_hora?.split(' ')[1];
-        return horaCompleta?.substring(0, 5);
-      }).filter(h => h);
-      
-      if (agendamentoSelecionado && agendamentoSelecionado.hora) {
-        const index = horariosOcupados.indexOf(agendamentoSelecionado.hora);
-        if (index !== -1) {
-          horariosOcupados.splice(index, 1);
-        }
-      }
-      
-      const horariosLivres = horariosDisponiveis.filter(horario => 
-        !horariosOcupados.includes(horario)
-      );
-      
-      setHorariosDoDia(horariosLivres);
-    } else {
+    if (formData.data) {
       setHorariosDoDia(horariosDisponiveis);
     }
-  }, [formData.data, formData.profissionalId, horariosDisponiveis, agendamentosExistentes, agendamentoSelecionado]);
+  }, [formData.data, horariosDisponiveis]);
 
-  // Atualizar serviço selecionado
+  // Atualizar serviço selecionado quando mudar
   useEffect(() => {
     if (formData.servicoId) {
       const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
@@ -157,7 +129,7 @@ const ModalAgendamento = ({
     }
   }, [formData.profissionalId, profissionais]);
 
-  // Calcular comissão
+  // Calcular comissão baseada no serviço e profissional
   useEffect(() => {
     if (servicoSelecionado && profissionalSelecionado) {
       const percComissao = servicoSelecionado.comissao_percentual || 
@@ -174,14 +146,14 @@ const ModalAgendamento = ({
     }
   }, [servicoSelecionado, profissionalSelecionado]);
 
-  // Salvar status anterior
+  // Salvar o status anterior quando o modal abrir
   useEffect(() => {
     if (agendamentoSelecionado) {
       setStatusAnterior(agendamentoSelecionado.status);
     }
   }, [agendamentoSelecionado, show]);
 
-  // Mostrar pagamento quando status for concluído
+  // Quando o status muda para concluído, mostrar opções de pagamento
   useEffect(() => {
     if (formData.status === 'concluido') {
       setMostrarPagamento(true);
@@ -190,24 +162,14 @@ const ModalAgendamento = ({
     }
   }, [formData.status]);
 
-  // Resetar estado do modal
-  useEffect(() => {
-    if (!show) {
-      setSalvando(false);
-      setPagamentoRegistrado(false);
-      setMostrarPagamento(false);
-      setFormaPagamento('dinheiro');
-      setBandeiraCartao('');
-      setParcelas(1);
-    }
-  }, [show]);
-
+  // FUNÇÃO PARA SELECIONAR CLIENTE - ADICIONADA
   const selecionarCliente = (cliente) => {
     setFormData({...formData, clienteId: cliente.id});
     setBuscaCliente(cliente.nome);
     setMostrarDropdownCliente(false);
   };
 
+  // FUNÇÃO PARA LIMPAR BUSCA - ADICIONADA
   const limparBuscaCliente = () => {
     setBuscaCliente('');
     setFormData({...formData, clienteId: ''});
@@ -215,114 +177,58 @@ const ModalAgendamento = ({
   };
 
   const handleSalvar = async () => {
-    if (salvando) return;
-    
-    if (!formData.clienteId) {
-      alert('Selecione um cliente');
-      return;
-    }
-    
-    if (!formData.profissionalId) {
-      alert('Selecione um profissional');
-      return;
-    }
-    
-    if (!formData.servicoId) {
-      alert('Selecione um serviço');
-      return;
-    }
-    
-    if (!formData.data) {
-      alert('Selecione uma data');
-      return;
-    }
-    
-    if (!formData.hora) {
-      alert('Selecione um horário');
-      return;
-    }
-    
-    if (!horariosDoDia.includes(formData.hora)) {
-      alert('Este horário não está mais disponível. Por favor, selecione outro horário.');
-      return;
-    }
-    
     const statusMudouParaConcluido = 
       agendamentoSelecionado && 
       formData.status === 'concluido' && 
       statusAnterior !== 'concluido';
 
-    if (formData.status === 'concluido') {
-      if (!formaPagamento) {
-        alert('Selecione a forma de pagamento');
-        return;
-      }
-
-      if (formaPagamento === 'credito_parcelado' && (!parcelas || parcelas < 1)) {
-        alert('Selecione o número de parcelas');
-        return;
-      }
-
-      if ((formaPagamento === 'debito' || formaPagamento === 'credito' || formaPagamento === 'credito_parcelado') && !bandeiraCartao) {
-        alert('Selecione a bandeira do cartão');
-        return;
-      }
+    if (formData.status === 'concluido' && !formaPagamento) {
+      alert('Selecione a forma de pagamento');
+      return;
     }
 
-    setSalvando(true);
+    if (formaPagamento === 'credito_parcelado' && (!parcelas || parcelas < 1)) {
+      alert('Selecione o número de parcelas');
+      return;
+    }
 
-    try {
-      const dadosPagamento = formData.status === 'concluido' ? {
-        forma_pagamento: formaPagamento,
-        bandeira_cartao: bandeiraCartao || null,
-        parcelas: parcelas || 1,
-        valor_total: servicoSelecionado?.preco || 0,
-        valor_comissao: comissaoCalculada,
-        percentual_comissao: percentualComissao,
-        data_pagamento: new Date().toISOString()
-      } : null;
+    if ((formaPagamento === 'debito' || formaPagamento === 'credito' || formaPagamento === 'credito_parcelado') && !bandeiraCartao) {
+      alert('Selecione a bandeira do cartão');
+      return;
+    }
 
-      const dadosCompletos = {
-        ...formData,
-        clienteId: parseInt(formData.clienteId),
-        profissionalId: parseInt(formData.profissionalId),
-        servicoId: parseInt(formData.servicoId),
-        ...(agendamentoSelecionado && { id: agendamentoSelecionado.id }),
-        ...(dadosPagamento && { pagamento: dadosPagamento })
-      };
+    const dadosPagamento = {
+      forma_pagamento: formaPagamento,
+      bandeira_cartao: bandeiraCartao || null,
+      parcelas: parcelas || 1,
+      valor_total: servicoSelecionado?.preco || 0,
+      valor_comissao: comissaoCalculada,
+      percentual_comissao: percentualComissao,
+      data_pagamento: new Date().toISOString()
+    };
 
-      console.log('📝 Salvando agendamento completo:', dadosCompletos);
+    await onSalvar(dadosPagamento);
 
-      await onSalvar(dadosCompletos);
-
-      if (statusMudouParaConcluido) {
-        const evento = new CustomEvent('agendamentoConcluido', {
-          detail: {
-            agendamentoId: agendamentoSelecionado.id,
-            funcionarioId: parseInt(formData.profissionalId),
-            funcionarioNome: profissionalSelecionado?.nome,
-            servicoNome: servicoSelecionado?.nome,
-            valor: servicoSelecionado?.preco || 0,
-            comissao: comissaoCalculada,
-            data: formData.data,
-            pagamento: dadosPagamento
-          }
-        });
-        window.dispatchEvent(evento);
-        
-        console.log('🎉 Evento agendamentoConcluido disparado!', evento.detail);
-      }
-
-      setMostrarPagamento(false);
-      setPagamentoRegistrado(true);
-      onClose();
+    if (statusMudouParaConcluido) {
+      const evento = new CustomEvent('agendamentoConcluido', {
+        detail: {
+          agendamentoId: agendamentoSelecionado.id,
+          funcionarioId: parseInt(formData.profissionalId),
+          funcionarioNome: profissionalSelecionado?.nome,
+          servicoNome: servicoSelecionado?.nome,
+          valor: servicoSelecionado?.preco || 0,
+          comissao: comissaoCalculada,
+          data: formData.data,
+          pagamento: dadosPagamento
+        }
+      });
+      window.dispatchEvent(evento);
       
-    } catch (error) {
-      console.error('❌ Erro ao salvar agendamento:', error);
-      alert('Erro ao salvar agendamento. Verifique o console para mais detalhes.');
-    } finally {
-      setSalvando(false);
+      console.log('🎉 Evento agendamentoConcluido disparado!', evento.detail);
     }
+
+    setMostrarPagamento(false);
+    setPagamentoRegistrado(true);
   };
 
   if (!show) return null;
@@ -337,49 +243,44 @@ const ModalAgendamento = ({
           <button 
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            disabled={salvando}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         
         <div className="p-6 space-y-4">
-          {/* Cliente com busca */}
+          {/* Cliente COM BUSCA - SUBSTITUÍDO */}
           <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cliente *
             </label>
             <div className="relative">
-              <div className="relative">
-                <input
-                  type="text"
-                  className="input-field pl-10 pr-10"
-                  placeholder="Digite o nome, telefone ou email do cliente..."
-                  value={buscaCliente}
-                  onChange={(e) => {
-                    setBuscaCliente(e.target.value);
-                    setMostrarDropdownCliente(true);
-                    if (e.target.value === '') {
-                      setFormData({...formData, clienteId: ''});
-                    }
-                  }}
-                  onFocus={() => setMostrarDropdownCliente(true)}
-                  disabled={salvando}
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                {buscaCliente && (
-                  <button
-                    onClick={limparBuscaCliente}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    disabled={salvando}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-                {!buscaCliente && (
-                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                )}
-              </div>
+              <input
+                type="text"
+                className="input-field pl-10 pr-10"
+                placeholder="Digite o nome ou telefone do cliente..."
+                value={buscaCliente}
+                onChange={(e) => {
+                  setBuscaCliente(e.target.value);
+                  setMostrarDropdownCliente(true);
+                  if (e.target.value === '') {
+                    setFormData({...formData, clienteId: ''});
+                  }
+                }}
+                onFocus={() => setMostrarDropdownCliente(true)}
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              {buscaCliente && (
+                <button
+                  onClick={limparBuscaCliente}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              {!buscaCliente && (
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              )}
             </div>
             
             {/* Dropdown de clientes */}
@@ -389,28 +290,17 @@ const ModalAgendamento = ({
                   clientesFiltrados.map(cliente => (
                     <button
                       key={cliente.id}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-100 transition-colors flex justify-between items-center border-b border-gray-100 last:border-0"
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors flex justify-between items-center border-b border-gray-100 last:border-0"
                       onClick={() => selecionarCliente(cliente)}
                     >
-                      <div className="flex-1">
+                      <div>
                         <p className="font-medium text-gray-900">{cliente.nome}</p>
-                        <div className="flex gap-3 mt-1">
-                          {cliente.telefone && (
-                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                              <Phone className="w-3 h-3" />
-                              {cliente.telefone}
-                            </p>
-                          )}
-                          {cliente.email && (
-                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                              <Mail className="w-3 h-3" />
-                              {cliente.email}
-                            </p>
-                          )}
-                        </div>
+                        {cliente.telefone && (
+                          <p className="text-xs text-gray-500">{cliente.telefone}</p>
+                        )}
                       </div>
                       {formData.clienteId == cliente.id && (
-                        <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
@@ -423,10 +313,6 @@ const ModalAgendamento = ({
                 )}
               </div>
             )}
-            
-            <p className="text-xs text-gray-500 mt-1">
-              💡 Digite para buscar por nome, telefone ou email
-            </p>
           </div>
 
           {/* Profissional e Serviço */}
@@ -438,10 +324,7 @@ const ModalAgendamento = ({
               <select 
                 className="input-field"
                 value={formData.profissionalId}
-                onChange={(e) => {
-                  setFormData({...formData, profissionalId: e.target.value, hora: ''});
-                }}
-                disabled={salvando}
+                onChange={(e) => setFormData({...formData, profissionalId: e.target.value})}
               >
                 <option value="">Selecione</option>
                 {profissionais.map(prof => (
@@ -457,7 +340,6 @@ const ModalAgendamento = ({
                 className="input-field"
                 value={formData.servicoId}
                 onChange={(e) => setFormData({...formData, servicoId: e.target.value})}
-                disabled={salvando}
               >
                 <option value="">Selecione</option>
                 {servicos.map(serv => (
@@ -504,11 +386,7 @@ const ModalAgendamento = ({
                 type="date" 
                 className="input-field"
                 value={formData.data}
-                onChange={(e) => {
-                  setFormData({...formData, data: e.target.value, hora: ''});
-                }}
-                disabled={salvando}
-                min={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setFormData({...formData, data: e.target.value})}
               />
             </div>
             <div>
@@ -520,7 +398,6 @@ const ModalAgendamento = ({
                 value={formData.hora}
                 onChange={(e) => setFormData({...formData, hora: e.target.value})}
                 required
-                disabled={salvando || !formData.profissionalId || !formData.data}
               >
                 <option value="">Selecione um horário</option>
                 {horariosDoDia.map(horario => (
@@ -531,11 +408,6 @@ const ModalAgendamento = ({
               </select>
               {loading && (
                 <p className="text-xs text-gray-500 mt-1">Carregando horários...</p>
-              )}
-              {formData.profissionalId && formData.data && horariosDoDia.length === 0 && !loading && (
-                <p className="text-xs text-red-500 mt-1">
-                  ⚠️ Não há horários disponíveis para este profissional nesta data
-                </p>
               )}
               {config && config.intervaloMinutos && (
                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
@@ -555,7 +427,6 @@ const ModalAgendamento = ({
               className="input-field"
               value={formData.status}
               onChange={(e) => setFormData({...formData, status: e.target.value})}
-              disabled={salvando}
             >
               <option value="agendado">📅 Agendado</option>
               <option value="confirmado">✅ Confirmado</option>
@@ -581,7 +452,6 @@ const ModalAgendamento = ({
                   className="input-field"
                   value={formaPagamento}
                   onChange={(e) => setFormaPagamento(e.target.value)}
-                  disabled={salvando}
                 >
                   <option value="">Selecione...</option>
                   {formasPagamento.map(fp => (
@@ -601,7 +471,6 @@ const ModalAgendamento = ({
                       className="input-field"
                       value={bandeiraCartao}
                       onChange={(e) => setBandeiraCartao(e.target.value)}
-                      disabled={salvando}
                     >
                       <option value="">Selecione a bandeira...</option>
                       {bandeirasCartao.map(bandeira => (
@@ -619,7 +488,6 @@ const ModalAgendamento = ({
                         className="input-field"
                         value={parcelas}
                         onChange={(e) => setParcelas(parseInt(e.target.value))}
-                        disabled={salvando}
                       >
                         {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
                           <option key={num} value={num}>{num}x</option>
@@ -660,7 +528,6 @@ const ModalAgendamento = ({
               placeholder="Observações sobre o atendimento..."
               value={formData.observacoes}
               onChange={(e) => setFormData({...formData, observacoes: e.target.value})}
-              disabled={salvando}
             />
           </div>
 
@@ -685,7 +552,6 @@ const ModalAgendamento = ({
             <button 
               onClick={() => onExcluir(agendamentoSelecionado.id)}
               className="btn-danger"
-              disabled={salvando}
             >
               Excluir
             </button>
@@ -693,16 +559,14 @@ const ModalAgendamento = ({
           <button 
             onClick={onClose}
             className="btn-secondary"
-            disabled={salvando}
           >
             Cancelar
           </button>
           <button 
             onClick={handleSalvar}
             className="btn-primary"
-            disabled={salvando}
           >
-            {salvando ? 'Salvando...' : (agendamentoSelecionado ? 'Salvar Alterações' : 'Criar Agendamento')}
+            {agendamentoSelecionado ? 'Salvar Alterações' : 'Criar Agendamento'}
           </button>
         </div>
       </div>
