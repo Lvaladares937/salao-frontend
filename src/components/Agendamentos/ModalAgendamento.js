@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Mail, DollarSign, CreditCard, Info, Clock } from 'lucide-react';
+import { X, Phone, Mail, DollarSign, CreditCard, Info, Clock, Search, ChevronDown } from 'lucide-react';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 
 const ModalAgendamento = ({
@@ -13,7 +13,7 @@ const ModalAgendamento = ({
   profissionais,
   servicos,
   clientes,
-  agendamentosExistentes = [] // Adicionado para verificar horários ocupados
+  agendamentosExistentes = []
 }) => {
   const { horariosDisponiveis, loading, config } = useConfiguracoesHorarios();
   
@@ -29,6 +29,11 @@ const ModalAgendamento = ({
   const [pagamentoRegistrado, setPagamentoRegistrado] = useState(false);
   const [horariosDoDia, setHorariosDoDia] = useState([]);
   const [salvando, setSalvando] = useState(false);
+  
+  // States para busca de cliente
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [mostrarDropdownCliente, setMostrarDropdownCliente] = useState(false);
+  const [clientesFiltrados, setClientesFiltrados] = useState([]);
 
   // Lista de bandeiras de cartão
   const bandeirasCartao = [
@@ -64,10 +69,45 @@ const ModalAgendamento = ({
     { id: 'fiado', nome: 'Fiado (Crediário)' }
   ];
 
+  // Filtrar clientes baseado na busca
+  useEffect(() => {
+    if (!clientes) return;
+    
+    if (buscaCliente.trim() === '') {
+      setClientesFiltrados(clientes.slice(0, 20));
+    } else {
+      const filtrados = clientes.filter(cliente => 
+        cliente.nome?.toLowerCase().includes(buscaCliente.toLowerCase()) ||
+        (cliente.telefone && cliente.telefone.includes(buscaCliente)) ||
+        (cliente.email && cliente.email.toLowerCase().includes(buscaCliente.toLowerCase()))
+      );
+      setClientesFiltrados(filtrados.slice(0, 50));
+    }
+  }, [buscaCliente, clientes]);
+
+  // Carregar cliente quando editar
+  useEffect(() => {
+    if (agendamentoSelecionado && agendamentoSelecionado.cliente_id && clientes.length > 0) {
+      const clienteEncontrado = clientes.find(c => c.id === agendamentoSelecionado.cliente_id);
+      if (clienteEncontrado) {
+        setBuscaCliente(clienteEncontrado.nome);
+      }
+    } else if (!agendamentoSelecionado) {
+      setBuscaCliente('');
+    }
+  }, [agendamentoSelecionado, clientes]);
+
+  // Resetar busca quando fechar modal
+  useEffect(() => {
+    if (!show) {
+      setBuscaCliente('');
+      setMostrarDropdownCliente(false);
+    }
+  }, [show]);
+
   // Gerar horários disponíveis baseados nas configurações e agendamentos existentes
   useEffect(() => {
     if (formData.data && formData.profissionalId && horariosDisponiveis.length > 0) {
-      // Buscar agendamentos já existentes para este profissional nesta data
       const agendamentosDoDia = agendamentosExistentes.filter(ag => {
         const dataAgendamento = ag.data_hora?.split(' ')[0];
         const profissionalId = ag.profissional_id || ag.profissionalId;
@@ -75,13 +115,11 @@ const ModalAgendamento = ({
                profissionalId === parseInt(formData.profissionalId);
       });
       
-      // Extrair horários já ocupados
       const horariosOcupados = agendamentosDoDia.map(ag => {
         const horaCompleta = ag.data_hora?.split(' ')[1];
-        return horaCompleta?.substring(0, 5); // Pega apenas HH:MM
+        return horaCompleta?.substring(0, 5);
       }).filter(h => h);
       
-      // Se for edição, remover o horário do próprio agendamento da lista de ocupados
       if (agendamentoSelecionado && agendamentoSelecionado.hora) {
         const index = horariosOcupados.indexOf(agendamentoSelecionado.hora);
         if (index !== -1) {
@@ -89,7 +127,6 @@ const ModalAgendamento = ({
         }
       }
       
-      // Filtrar horários disponíveis
       const horariosLivres = horariosDisponiveis.filter(horario => 
         !horariosOcupados.includes(horario)
       );
@@ -100,7 +137,7 @@ const ModalAgendamento = ({
     }
   }, [formData.data, formData.profissionalId, horariosDisponiveis, agendamentosExistentes, agendamentoSelecionado]);
 
-  // Atualizar serviço selecionado quando mudar
+  // Atualizar serviço selecionado
   useEffect(() => {
     if (formData.servicoId) {
       const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
@@ -120,10 +157,9 @@ const ModalAgendamento = ({
     }
   }, [formData.profissionalId, profissionais]);
 
-  // Calcular comissão baseada no serviço e profissional
+  // Calcular comissão
   useEffect(() => {
     if (servicoSelecionado && profissionalSelecionado) {
-      // Pegar comissão do serviço (se tiver) ou a comissão padrão do profissional
       const percComissao = servicoSelecionado.comissao_percentual || 
                           profissionalSelecionado.comissao_percentual || 
                           30;
@@ -138,14 +174,14 @@ const ModalAgendamento = ({
     }
   }, [servicoSelecionado, profissionalSelecionado]);
 
-  // Salvar o status anterior quando o modal abrir
+  // Salvar status anterior
   useEffect(() => {
     if (agendamentoSelecionado) {
       setStatusAnterior(agendamentoSelecionado.status);
     }
   }, [agendamentoSelecionado, show]);
 
-  // Quando o status muda para concluído, mostrar opções de pagamento
+  // Mostrar pagamento quando status for concluído
   useEffect(() => {
     if (formData.status === 'concluido') {
       setMostrarPagamento(true);
@@ -154,7 +190,7 @@ const ModalAgendamento = ({
     }
   }, [formData.status]);
 
-  // Resetar estado do modal quando fechar
+  // Resetar estado do modal
   useEffect(() => {
     if (!show) {
       setSalvando(false);
@@ -166,10 +202,21 @@ const ModalAgendamento = ({
     }
   }, [show]);
 
+  const selecionarCliente = (cliente) => {
+    setFormData({...formData, clienteId: cliente.id});
+    setBuscaCliente(cliente.nome);
+    setMostrarDropdownCliente(false);
+  };
+
+  const limparBuscaCliente = () => {
+    setBuscaCliente('');
+    setFormData({...formData, clienteId: ''});
+    setMostrarDropdownCliente(true);
+  };
+
   const handleSalvar = async () => {
     if (salvando) return;
     
-    // Validações básicas
     if (!formData.clienteId) {
       alert('Selecione um cliente');
       return;
@@ -195,32 +242,27 @@ const ModalAgendamento = ({
       return;
     }
     
-    // Verificar se o horário ainda está disponível (evitar conflitos)
     if (!horariosDoDia.includes(formData.hora)) {
       alert('Este horário não está mais disponível. Por favor, selecione outro horário.');
       return;
     }
     
-    // Verificar se é um agendamento concluído
     const statusMudouParaConcluido = 
       agendamentoSelecionado && 
       formData.status === 'concluido' && 
       statusAnterior !== 'concluido';
 
-    // Se for concluído, validar forma de pagamento
     if (formData.status === 'concluido') {
       if (!formaPagamento) {
         alert('Selecione a forma de pagamento');
         return;
       }
 
-      // Se for cartão de crédito parcelado, validar parcelas
       if (formaPagamento === 'credito_parcelado' && (!parcelas || parcelas < 1)) {
         alert('Selecione o número de parcelas');
         return;
       }
 
-      // Se for cartão (débito ou crédito), validar bandeira
       if ((formaPagamento === 'debito' || formaPagamento === 'credito' || formaPagamento === 'credito_parcelado') && !bandeiraCartao) {
         alert('Selecione a bandeira do cartão');
         return;
@@ -230,7 +272,6 @@ const ModalAgendamento = ({
     setSalvando(true);
 
     try {
-      // Preparar dados do pagamento
       const dadosPagamento = formData.status === 'concluido' ? {
         forma_pagamento: formaPagamento,
         bandeira_cartao: bandeiraCartao || null,
@@ -241,25 +282,19 @@ const ModalAgendamento = ({
         data_pagamento: new Date().toISOString()
       } : null;
 
-      // Preparar dados COMPLETOS do agendamento
       const dadosCompletos = {
         ...formData,
-        // Garantir que os IDs sejam números
         clienteId: parseInt(formData.clienteId),
         profissionalId: parseInt(formData.profissionalId),
         servicoId: parseInt(formData.servicoId),
-        // Se for edição, manter o ID
         ...(agendamentoSelecionado && { id: agendamentoSelecionado.id }),
-        // Adicionar dados de pagamento se houver
         ...(dadosPagamento && { pagamento: dadosPagamento })
       };
 
       console.log('📝 Salvando agendamento completo:', dadosCompletos);
 
-      // Chamar a função de salvar com os dados completos
       await onSalvar(dadosCompletos);
 
-      // Se o status mudou para concluído, disparar evento
       if (statusMudouParaConcluido) {
         const evento = new CustomEvent('agendamentoConcluido', {
           detail: {
@@ -278,11 +313,8 @@ const ModalAgendamento = ({
         console.log('🎉 Evento agendamentoConcluido disparado!', evento.detail);
       }
 
-      // Resetar estado de pagamento
       setMostrarPagamento(false);
       setPagamentoRegistrado(true);
-      
-      // Fechar o modal após salvar
       onClose();
       
     } catch (error) {
@@ -312,22 +344,89 @@ const ModalAgendamento = ({
         </div>
         
         <div className="p-6 space-y-4">
-          {/* Cliente */}
-          <div>
+          {/* Cliente com busca */}
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cliente *
             </label>
-            <select 
-              className="input-field"
-              value={formData.clienteId}
-              onChange={(e) => setFormData({...formData, clienteId: e.target.value})}
-              disabled={salvando}
-            >
-              <option value="">Selecione um cliente</option>
-              {clientes.map(cliente => (
-                <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <div className="relative">
+                <input
+                  type="text"
+                  className="input-field pl-10 pr-10"
+                  placeholder="Digite o nome, telefone ou email do cliente..."
+                  value={buscaCliente}
+                  onChange={(e) => {
+                    setBuscaCliente(e.target.value);
+                    setMostrarDropdownCliente(true);
+                    if (e.target.value === '') {
+                      setFormData({...formData, clienteId: ''});
+                    }
+                  }}
+                  onFocus={() => setMostrarDropdownCliente(true)}
+                  disabled={salvando}
+                />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                {buscaCliente && (
+                  <button
+                    onClick={limparBuscaCliente}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={salvando}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                {!buscaCliente && (
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                )}
+              </div>
+            </div>
+            
+            {/* Dropdown de clientes */}
+            {mostrarDropdownCliente && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {clientesFiltrados.length > 0 ? (
+                  clientesFiltrados.map(cliente => (
+                    <button
+                      key={cliente.id}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-100 transition-colors flex justify-between items-center border-b border-gray-100 last:border-0"
+                      onClick={() => selecionarCliente(cliente)}
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{cliente.nome}</p>
+                        <div className="flex gap-3 mt-1">
+                          {cliente.telefone && (
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {cliente.telefone}
+                            </p>
+                          )}
+                          {cliente.email && (
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {cliente.email}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {formData.clienteId == cliente.id && (
+                        <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-4 py-3 text-gray-500 text-sm">
+                    Nenhum cliente encontrado
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <p className="text-xs text-gray-500 mt-1">
+              💡 Digite para buscar por nome, telefone ou email
+            </p>
           </div>
 
           {/* Profissional e Serviço */}
@@ -340,9 +439,7 @@ const ModalAgendamento = ({
                 className="input-field"
                 value={formData.profissionalId}
                 onChange={(e) => {
-                  setFormData({...formData, profissionalId: e.target.value});
-                  // Resetar horário quando mudar profissional
-                  setFormData(prev => ({...prev, hora: ''}));
+                  setFormData({...formData, profissionalId: e.target.value, hora: ''});
                 }}
                 disabled={salvando}
               >
@@ -370,7 +467,7 @@ const ModalAgendamento = ({
             </div>
           </div>
 
-          {/* Informações de Preço e Comissão (visível quando serviço selecionado) */}
+          {/* Informações de Preço e Comissão */}
           {servicoSelecionado && (
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <h3 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
@@ -468,7 +565,7 @@ const ModalAgendamento = ({
             </select>
           </div>
 
-          {/* Seção de Pagamento (aparece quando status = concluído) */}
+          {/* Seção de Pagamento */}
           {mostrarPagamento && (
             <div className="bg-green-50 p-4 rounded-lg border border-green-200 space-y-4">
               <h3 className="font-medium text-green-800 flex items-center gap-2">
@@ -476,7 +573,6 @@ const ModalAgendamento = ({
                 Registrar Pagamento
               </h3>
 
-              {/* Forma de Pagamento */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Forma de Pagamento *
@@ -494,7 +590,6 @@ const ModalAgendamento = ({
                 </select>
               </div>
 
-              {/* Bandeira do Cartão (para pagamentos com cartão) */}
               {(formaPagamento === 'debito' || formaPagamento === 'credito' || formaPagamento === 'credito_parcelado') && (
                 <>
                   <div>
@@ -515,7 +610,6 @@ const ModalAgendamento = ({
                     </select>
                   </div>
 
-                  {/* Parcelas (para crédito parcelado) */}
                   {formaPagamento === 'credito_parcelado' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -536,7 +630,6 @@ const ModalAgendamento = ({
                 </>
               )}
 
-              {/* Resumo do Pagamento */}
               <div className="bg-white p-3 rounded-lg">
                 <div className="flex justify-between text-sm">
                   <span>Valor Total:</span>
