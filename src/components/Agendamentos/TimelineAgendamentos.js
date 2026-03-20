@@ -28,13 +28,20 @@ const TimelineAgendamentos = ({
 
   // LOG PARA DEBUG
   useEffect(() => {
-    console.log('📊 Timeline - Profissionais recebidos:', profissionais?.map(p => p.nome));
+    console.log('📊 Timeline - Profissionais recebidos:', profissionais?.map(p => ({ id: p.id, nome: p.nome })));
     console.log('👤 Timeline - Usuário:', { 
       isFuncionario, 
       funcionarioId: usuario?.funcionarioId,
       nome: usuario?.nome 
     });
     console.log('📅 Timeline - Agendamentos recebidos:', agendamentos?.length);
+    if (agendamentos?.length > 0) {
+      console.log('📅 Timeline - Primeiro agendamento:', {
+        id: agendamentos[0].id,
+        data_hora: agendamentos[0].data_hora,
+        profissional_id: agendamentos[0].funcionario_id
+      });
+    }
   }, [profissionais, isFuncionario, usuario, agendamentos]);
 
   // FILTRO DE PROFISSIONAIS - FORÇADO para funcionário
@@ -94,7 +101,7 @@ const TimelineAgendamentos = ({
       detalhes: agendamentosFiltrados.map(a => ({
         id: a.id,
         data_hora: a.data_hora,
-        profissional: a.funcionario_nome,
+        profissional_id: a.funcionario_id,
         servico: a.servico_nome
       }))
     });
@@ -277,10 +284,51 @@ const TimelineAgendamentos = ({
                 {profissionaisFiltrados.map((prof) => {
                   const agendamento = agendamentosFiltrados.find(ag => {
                     if (!ag?.data_hora) return false;
-                    const dataAg = new Date(ag.data_hora);
+                    
+                    // Converter data_hora para objeto Date
+                    let dataAg;
+                    try {
+                      // Normalizar o formato: substituir espaço por T se necessário
+                      let dataStr = ag.data_hora;
+                      if (dataStr.includes(' ')) {
+                        dataStr = dataStr.replace(' ', 'T');
+                      }
+                      // Garantir que tem segundos
+                      if (dataStr.split(':').length === 2) {
+                        dataStr = dataStr + ':00';
+                      }
+                      dataAg = new Date(dataStr);
+                    } catch (e) {
+                      console.error('Erro ao parsear data:', ag.data_hora, e);
+                      return false;
+                    }
+                    
+                    // Verificar se a data é válida
+                    if (isNaN(dataAg.getTime())) {
+                      console.error('Data inválida:', ag.data_hora);
+                      return false;
+                    }
+                    
+                    // Extrair hora no formato HH:MM
                     const horaAgendamento = dataAg.getHours().toString().padStart(2, '0') + ':' + 
                                            dataAg.getMinutes().toString().padStart(2, '0');
-                    return ag.funcionario_id === prof.id && horaAgendamento === hora;
+                    
+                    // Comparar profissional e horário
+                    const match = ag.funcionario_id === prof.id && horaAgendamento === hora;
+                    
+                    // Log para debug (apenas para os primeiros agendamentos)
+                    if (ag.id && (ag.id === 120 || ag.id === 119 || ag.id === 118)) {
+                      console.log(`🔍 Comparando agendamento ID ${ag.id}:`, {
+                        data_hora_original: ag.data_hora,
+                        hora_extraida: horaAgendamento,
+                        hora_timeline: hora,
+                        profissional_ag: ag.funcionario_id,
+                        profissional_prof: prof.id,
+                        match
+                      });
+                    }
+                    
+                    return match;
                   });
 
                   if (agendamento) {
