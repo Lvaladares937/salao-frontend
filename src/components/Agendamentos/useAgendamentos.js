@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import agendamentosService from '../../services/agendamentosService';
 import funcionariosService from '../../services/funcionariosService';
@@ -202,6 +202,35 @@ export const useAgendamentos = () => {
     
     setAgendamentosFiltrados(filtrados);
   }, [agendamentos, filtroProfissional, filtroServico, isFuncionario]);
+
+  // 🔥 NOVO - FILTRO POR DATA SELECIONADA
+  const agendamentosPorData = useMemo(() => {
+    if (!agendamentosFiltrados || !dataSelecionada) return [];
+    
+    const dataSelecionadaStr = format(dataSelecionada, 'yyyy-MM-dd');
+    
+    const filtrados = agendamentosFiltrados.filter(agendamento => {
+      if (!agendamento.data_hora) return false;
+      
+      // Extrair a data do agendamento (pode vir com T ou espaço)
+      let dataAgendamento = agendamento.data_hora;
+      
+      // Se tiver 'T' (formato ISO), pega só a parte da data
+      if (dataAgendamento.includes('T')) {
+        dataAgendamento = dataAgendamento.split('T')[0];
+      }
+      // Se tiver espaço, pega só a data
+      if (dataAgendamento.includes(' ')) {
+        dataAgendamento = dataAgendamento.split(' ')[0];
+      }
+      
+      return dataAgendamento === dataSelecionadaStr;
+    });
+    
+    console.log(`📅 Agendamentos para ${dataSelecionadaStr}: ${filtrados.length}`);
+    
+    return filtrados;
+  }, [agendamentosFiltrados, dataSelecionada]);
 
   // Função para abrir novo agendamento
   const abrirNovoAgendamento = (profissionalId = null, horario = null) => {
@@ -443,7 +472,7 @@ export const useAgendamentos = () => {
     setFiltroProfissional,
     filtroServico,
     setFiltroServico,
-    agendamentos: agendamentosFiltrados,
+    agendamentos: agendamentosPorData, // 🔥 AGORA FILTRADO POR DATA!
     todosAgendamentos: agendamentos,
     formData,
     setFormData,
