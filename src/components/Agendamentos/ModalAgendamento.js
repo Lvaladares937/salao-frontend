@@ -231,6 +231,9 @@ const ModalAgendamento = ({
 
   if (!show) return null;
 
+  // Verificar se o horário atual está na lista de horários disponíveis
+  const horarioAtualEstaDisponivel = horariosDoDia.includes(formData.hora);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -388,7 +391,7 @@ const ModalAgendamento = ({
               />
               {agendamentoSelecionado && (
                 <p className="text-xs text-gray-500 mt-1">
-                  ⚠️ A data não pode ser alterada após o agendamento ser criado
+                  ⚠️ A data não pode ser alterada
                 </p>
               )}
             </div>
@@ -404,6 +407,12 @@ const ModalAgendamento = ({
                 disabled={!formData.profissionalId || !formData.data}
               >
                 <option value="" disabled>Selecione um horário</option>
+                {/* Se o horário atual não estiver na lista, adiciona ele como opção */}
+                {formData.hora && !horarioAtualEstaDisponivel && (
+                  <option value={formData.hora} className="bg-yellow-100">
+                    {formData.hora} (horário atual)
+                  </option>
+                )}
                 {horariosDoDia.map(horario => (
                   <option key={horario} value={horario}>
                     {horario}
