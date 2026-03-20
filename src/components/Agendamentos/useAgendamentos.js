@@ -219,41 +219,73 @@ export const useAgendamentos = () => {
 
   // Abrir editar agendamento
   const abrirEditarAgendamento = (agendamento) => {
-    console.log('🔍 VERIFICAÇÃO DE EDIÇÃO:');
-    console.log('   Agendamento ID:', agendamento.id);
-    console.log('   Funcionário ID do agendamento:', agendamento.funcionario_id);
-    console.log('   Meu funcionário ID:', usuario?.funcionarioId);
-    console.log('   Meu nível:', nivel);
-    console.log('   É funcionário?', isFuncionario);
+  console.log('🔍 VERIFICAÇÃO DE EDIÇÃO:');
+  console.log('   Agendamento ID:', agendamento.id);
+  console.log('   Data/Hora original (banco):', agendamento.data_hora);
+  
+  // Função para extrair hora corretamente (direto da string, sem conversão de fuso)
+  const extrairHoraCorreta = (dataHoraStr) => {
+    if (!dataHoraStr) return '09:00';
+    
+    // Tenta extrair no formato ISO "2026-03-20T16:00:00.000Z"
+    let match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
+    }
+    
+    // Tenta extrair no formato com espaço "2026-03-20 16:00:00"
+    match = dataHoraStr.match(/\s(\d{2}):(\d{2})/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
+    }
+    
+    // Fallback
+    console.warn('Não foi possível extrair hora de:', dataHoraStr);
+    return '09:00';
+  };
+  
+  // Função para extrair data corretamente
+  const extrairDataCorreta = (dataHoraStr) => {
+    if (!dataHoraStr) return format(new Date(), 'yyyy-MM-dd');
+    
+    let match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    
+    return format(new Date(), 'yyyy-MM-dd');
+  };
+  
+  const horaCorreta = extrairHoraCorreta(agendamento.data_hora);
+  const dataCorreta = extrairDataCorreta(agendamento.data_hora);
+  
+  console.log('   Hora extraída:', horaCorreta);
+  console.log('   Data extraída:', dataCorreta);
 
-    if (!podeEditar('agendamentos')) {
-      alert('Você não tem permissão para editar agendamentos');
+  if (!podeEditar('agendamentos')) {
+    alert('Você não tem permissão para editar agendamentos');
+    return;
+  }
+
+  if (isFuncionario) {
+    if (agendamento.funcionario_id !== usuario?.funcionarioId) {
+      alert('Você só pode editar seus próprios agendamentos!');
       return;
     }
+  }
 
-    if (isFuncionario) {
-      if (agendamento.funcionario_id !== usuario?.funcionarioId) {
-        console.log('❌ BLOQUEADO: Tentativa de editar agendamento de outro funcionário');
-        alert('Você só pode editar seus próprios agendamentos!');
-        return;
-      }
-      console.log('✅ PERMITIDO: Funcionário editando próprio agendamento');
-    } else {
-      console.log('✅ PERMITIDO: Admin/Gerente editando agendamento');
-    }
-
-    setAgendamentoSelecionado(agendamento);
-    setFormData({
-      clienteId: agendamento.cliente_id,
-      profissionalId: agendamento.funcionario_id,
-      servicoId: agendamento.servico_id,
-      data: format(new Date(agendamento.data_hora), 'yyyy-MM-dd'),
-      hora: format(new Date(agendamento.data_hora), 'HH:mm'),
-      status: agendamento.status,
-      observacoes: agendamento.observacoes || ''
-    });
-    setShowModal(true);
-  };
+  setAgendamentoSelecionado(agendamento);
+  setFormData({
+    clienteId: agendamento.cliente_id,
+    profissionalId: agendamento.funcionario_id,
+    servicoId: agendamento.servico_id,
+    data: dataCorreta,
+    hora: horaCorreta,
+    status: agendamento.status,
+    observacoes: agendamento.observacoes || ''
+  });
+  setShowModal(true);
+};
 
   // Função para salvar agendamento
   const salvarAgendamento = async (dadosPagamento) => {
