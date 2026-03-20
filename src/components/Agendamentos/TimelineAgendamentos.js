@@ -26,6 +26,54 @@ const TimelineAgendamentos = ({
   
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
+  // Função para extrair hora ignorando fuso horário
+  const extrairHoraLocal = (dataHoraStr) => {
+    if (!dataHoraStr) return null;
+    
+    // Se a string tem formato ISO com Z (UTC)
+    if (dataHoraStr.includes('Z')) {
+      // Remove o Z e o milissegundos se houver
+      let cleanStr = dataHoraStr.replace('Z', '');
+      if (cleanStr.includes('.')) {
+        cleanStr = cleanStr.split('.')[0];
+      }
+      // Pega a parte da hora diretamente da string, sem converter para Date
+      const match = cleanStr.match(/(\d{2}):(\d{2})/);
+      if (match) {
+        return `${match[1]}:${match[2]}`;
+      }
+    }
+    
+    // Se for formato "2026-03-20T16:00:00"
+    if (dataHoraStr.includes('T')) {
+      const match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
+      if (match) {
+        return `${match[1]}:${match[2]}`;
+      }
+    }
+    
+    // Se for formato "2026-03-20 16:00:00"
+    if (dataHoraStr.includes(' ')) {
+      const match = dataHoraStr.match(/\s(\d{2}):(\d{2})/);
+      if (match) {
+        return `${match[1]}:${match[2]}`;
+      }
+    }
+    
+    // Fallback: tentar com Date (mas vai ter problema de fuso)
+    try {
+      const date = new Date(dataHoraStr);
+      if (!isNaN(date.getTime())) {
+        return date.getHours().toString().padStart(2, '0') + ':' + 
+               date.getMinutes().toString().padStart(2, '0');
+      }
+    } catch (e) {
+      console.error('Erro ao extrair hora:', dataHoraStr, e);
+    }
+    
+    return null;
+  };
+
   // LOG PARA DEBUG
   useEffect(() => {
     console.log('📊 Timeline - Profissionais recebidos:', profissionais?.map(p => ({ id: p.id, nome: p.nome })));
@@ -36,11 +84,11 @@ const TimelineAgendamentos = ({
     });
     console.log('📅 Timeline - Agendamentos recebidos:', agendamentos?.length);
     if (agendamentos?.length > 0) {
-      console.log('📅 Timeline - Primeiro agendamento:', {
-        id: agendamentos[0].id,
-        data_hora: agendamentos[0].data_hora,
-        profissional_id: agendamentos[0].funcionario_id
-      });
+      console.log('📅 Timeline - Teste extração de hora:', agendamentos.slice(0, 3).map(a => ({
+        id: a.id,
+        data_hora_original: a.data_hora,
+        hora_extraida: extrairHoraLocal(a.data_hora)
+      })));
     }
   }, [profissionais, isFuncionario, usuario, agendamentos]);
 
@@ -49,7 +97,6 @@ const TimelineAgendamentos = ({
     if (!profissionais) return [];
     
     if (isFuncionario && usuario?.funcionarioId) {
-      // Filtra para garantir que só tem o funcionário logado
       const apenasEu = profissionais.filter(prof => prof.id === usuario.funcionarioId);
       console.log('🔒 Timeline - Profissionais filtrados (só eu):', apenasEu.map(p => p.nome));
       return apenasEu;
@@ -66,24 +113,15 @@ const TimelineAgendamentos = ({
     return numero.toFixed(2).replace('.', ',');
   };
 
-  // Aplicar filtros nos agendamentos (SEM FILTRO DE DATA, pois o hook já fez)
+  // Aplicar filtros nos agendamentos
   const agendamentosFiltrados = React.useMemo(() => {
     if (!agendamentos) return [];
     
-    console.log('🔍 Timeline - Filtrando agendamentos:', {
-      total: agendamentos.length,
-      isFuncionario,
-      filtroProfissional,
-      filtroServico
-    });
-    
     return agendamentos.filter(ag => {
-      // Se for funcionário, mostra SÓ os dele
       if (isFuncionario && usuario?.funcionarioId) {
         return ag.funcionario_id === usuario.funcionarioId;
       }
       
-      // Para admin/gerente, aplica os filtros normais
       if (filtroProfissional && filtroProfissional !== 'todos') {
         if (ag.funcionario_id !== parseInt(filtroProfissional)) return false;
       }
@@ -96,15 +134,14 @@ const TimelineAgendamentos = ({
 
   // Log dos agendamentos após filtros
   useEffect(() => {
-    console.log('✅ Timeline - Agendamentos após filtros:', {
-      total: agendamentosFiltrados.length,
-      detalhes: agendamentosFiltrados.map(a => ({
+    if (agendamentosFiltrados.length > 0) {
+      console.log('✅ Timeline - Agendamentos após filtros:', agendamentosFiltrados.map(a => ({
         id: a.id,
-        data_hora: a.data_hora,
-        profissional_id: a.funcionario_id,
-        servico: a.servico_nome
-      }))
-    });
+        data_hora_original: a.data_hora,
+        hora_corrigida: extrairHoraLocal(a.data_hora),
+        profissional_id: a.funcionario_id
+      })));
+    }
   }, [agendamentosFiltrados]);
 
   // Usar horários das configurações ou fallback
@@ -126,7 +163,6 @@ const TimelineAgendamentos = ({
     }
   };
 
-  // Eventos de mouse para arrastar
   const handleMouseDown = (e) => {
     setIsDragging(true);
     setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
@@ -185,7 +221,6 @@ const TimelineAgendamentos = ({
   const larguraMinimaColuna = 280;
   const larguraTotal = profissionaisFiltrados.length * larguraMinimaColuna + 100;
 
-  // Se não houver profissionais filtrados
   if (!profissionaisFiltrados || profissionaisFiltrados.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-lg p-8 text-center">
@@ -201,7 +236,6 @@ const TimelineAgendamentos = ({
 
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden relative">
-      {/* Setas de navegação - SÓ MOSTRA SE TIVER MAIS DE 1 PROFISSIONAL */}
       {profissionaisFiltrados.length > 1 && showLeftArrow && (
         <button
           onClick={scrollLeftHandler}
@@ -222,7 +256,6 @@ const TimelineAgendamentos = ({
         </button>
       )}
 
-      {/* Container com scroll horizontal e arrasto por mouse */}
       <div 
         ref={scrollContainerRef}
         className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 cursor-grab active:cursor-grabbing"
@@ -237,7 +270,6 @@ const TimelineAgendamentos = ({
         }}
       >
         <div style={{ minWidth: `${larguraTotal}px` }}>
-          {/* Cabeçalho dos profissionais */}
           <div 
             className="grid bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 sticky top-0"
             style={{ 
@@ -267,7 +299,6 @@ const TimelineAgendamentos = ({
             ))}
           </div>
 
-          {/* Linhas de horário */}
           <div className="divide-y divide-gray-100">
             {horarios.map((hora, index) => (
               <div 
@@ -285,50 +316,12 @@ const TimelineAgendamentos = ({
                   const agendamento = agendamentosFiltrados.find(ag => {
                     if (!ag?.data_hora) return false;
                     
-                    // Converter data_hora para objeto Date
-                    let dataAg;
-                    try {
-                      // Normalizar o formato: substituir espaço por T se necessário
-                      let dataStr = ag.data_hora;
-                      if (dataStr.includes(' ')) {
-                        dataStr = dataStr.replace(' ', 'T');
-                      }
-                      // Garantir que tem segundos
-                      if (dataStr.split(':').length === 2) {
-                        dataStr = dataStr + ':00';
-                      }
-                      dataAg = new Date(dataStr);
-                    } catch (e) {
-                      console.error('Erro ao parsear data:', ag.data_hora, e);
-                      return false;
-                    }
+                    // Extrair hora da string original (sem conversão de fuso)
+                    const horaAgendamento = extrairHoraLocal(ag.data_hora);
                     
-                    // Verificar se a data é válida
-                    if (isNaN(dataAg.getTime())) {
-                      console.error('Data inválida:', ag.data_hora);
-                      return false;
-                    }
+                    if (!horaAgendamento) return false;
                     
-                    // Extrair hora no formato HH:MM
-                    const horaAgendamento = dataAg.getHours().toString().padStart(2, '0') + ':' + 
-                                           dataAg.getMinutes().toString().padStart(2, '0');
-                    
-                    // Comparar profissional e horário
-                    const match = ag.funcionario_id === prof.id && horaAgendamento === hora;
-                    
-                    // Log para debug (apenas para os primeiros agendamentos)
-                    if (ag.id && (ag.id === 120 || ag.id === 119 || ag.id === 118)) {
-                      console.log(`🔍 Comparando agendamento ID ${ag.id}:`, {
-                        data_hora_original: ag.data_hora,
-                        hora_extraida: horaAgendamento,
-                        hora_timeline: hora,
-                        profissional_ag: ag.funcionario_id,
-                        profissional_prof: prof.id,
-                        match
-                      });
-                    }
-                    
-                    return match;
+                    return ag.funcionario_id === prof.id && horaAgendamento === hora;
                   });
 
                   if (agendamento) {
@@ -387,14 +380,12 @@ const TimelineAgendamentos = ({
         </div>
       </div>
 
-      {/* Indicador de arraste - SÓ MOSTRA SE TIVER MAIS DE 1 PROFISSIONAL */}
       {profissionaisFiltrados.length > 1 && (
         <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 bg-gray-50/50">
           ← Arraste para o lado para ver mais profissionais (clique nos agendamentos para editar) →
         </div>
       )}
 
-      {/* Mensagem para funcionário quando está sozinho */}
       {isFuncionario && profissionaisFiltrados.length === 1 && (
         <div className="text-xs text-blue-600 text-center py-2 border-t border-gray-100 bg-blue-50">
           ✓ Mostrando apenas seus agendamentos
