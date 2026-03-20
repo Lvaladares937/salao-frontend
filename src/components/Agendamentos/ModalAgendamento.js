@@ -102,20 +102,12 @@ const ModalAgendamento = ({
     }
   }, [show]);
 
-  // Gerar horários disponíveis (NÃO ALTERA O HORÁRIO)
+  // Gerar horários disponíveis baseados nas configurações (apenas para novo agendamento)
   useEffect(() => {
-    if (formData.data) {
+    if (!agendamentoSelecionado && formData.data) {
       setHorariosDoDia(horariosDisponiveis);
     }
-  }, [formData.data, horariosDisponiveis]);
-
-  // LOG para verificar horário
-  useEffect(() => {
-    if (agendamentoSelecionado) {
-      console.log('🕒 Modal - Horário do agendamento:', formData.hora);
-      console.log('🕒 Modal - Data do agendamento:', formData.data);
-    }
-  }, [agendamentoSelecionado, formData.hora, formData.data]);
+  }, [formData.data, horariosDisponiveis, agendamentoSelecionado]);
 
   // Atualizar serviço selecionado quando mudar
   useEffect(() => {
@@ -239,12 +231,14 @@ const ModalAgendamento = ({
 
   if (!show) return null;
 
+  const isEdicao = !!agendamentoSelecionado;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
           <h2 className="text-xl font-semibold">
-            {agendamentoSelecionado ? 'Editar Agendamento' : 'Novo Agendamento'}
+            {isEdicao ? 'Editar Agendamento' : 'Novo Agendamento'}
           </h2>
           <button 
             onClick={onClose}
@@ -330,12 +324,18 @@ const ModalAgendamento = ({
                 className="input-field"
                 value={formData.profissionalId}
                 onChange={(e) => setFormData({...formData, profissionalId: e.target.value})}
+                disabled={isEdicao}
               >
                 <option value="">Selecione</option>
                 {profissionais.map(prof => (
                   <option key={prof.id} value={prof.id}>{prof.nome}</option>
                 ))}
               </select>
+              {isEdicao && (
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ O profissional não pode ser alterado
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -392,9 +392,9 @@ const ModalAgendamento = ({
                 className="input-field"
                 value={formData.data}
                 onChange={(e) => setFormData({...formData, data: e.target.value})}
-                disabled={!!agendamentoSelecionado}
+                disabled={isEdicao}
               />
-              {agendamentoSelecionado && (
+              {isEdicao && (
                 <p className="text-xs text-gray-500 mt-1">
                   ⚠️ A data não pode ser alterada
                 </p>
@@ -404,27 +404,41 @@ const ModalAgendamento = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Horário *
               </label>
-              <select
-                className="input-field"
-                value={formData.hora || ''}
-                onChange={(e) => setFormData({...formData, hora: e.target.value})}
-                required
-                disabled={!formData.profissionalId || !formData.data}
-              >
-                <option value="" disabled>Selecione um horário</option>
-                {horariosDoDia.map(horario => (
-                  <option key={horario} value={horario}>
-                    {horario}
-                  </option>
-                ))}
-              </select>
-              {loading && (
+              {isEdicao ? (
+                // Modo edição: mostra o horário como texto fixo
+                <div className="input-field bg-gray-100 cursor-not-allowed flex items-center justify-between">
+                  <span>{formData.hora || '--:--'}</span>
+                  <Clock className="w-4 h-4 text-gray-400" />
+                </div>
+              ) : (
+                // Modo criação: select para escolher horário
+                <select
+                  className="input-field"
+                  value={formData.hora || ''}
+                  onChange={(e) => setFormData({...formData, hora: e.target.value})}
+                  required
+                  disabled={!formData.profissionalId || !formData.data}
+                >
+                  <option value="" disabled>Selecione um horário</option>
+                  {horariosDoDia.map(horario => (
+                    <option key={horario} value={horario}>
+                      {horario}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {!isEdicao && loading && (
                 <p className="text-xs text-gray-500 mt-1">Carregando horários...</p>
               )}
-              {config && config.intervaloMinutos && (
+              {!isEdicao && config && config.intervaloMinutos && (
                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   Intervalo de {config.intervaloMinutos} minutos entre horários
+                </p>
+              )}
+              {isEdicao && (
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ O horário não pode ser alterado
                 </p>
               )}
             </div>
