@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Clock, Plus, ChevronLeft, ChevronRight, User } from 'lucide-react';
-import { isSameDay } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { getStatusColor } from './helpers';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,12 +26,30 @@ const TimelineAgendamentos = ({
   
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
-  // Função para extrair hora ignorando fuso horário - VERSÃO CORRIGIDA
+  // Função para extrair data ignorando fuso horário
+  const extrairDataLocal = (dataHoraStr) => {
+    if (!dataHoraStr) return null;
+    
+    // Caso 1: Formato ISO com Z: "2026-03-20T16:00:00.000Z"
+    let match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    
+    // Caso 2: Formato com espaço: "2026-03-20 16:00:00"
+    match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    
+    return null;
+  };
+
+  // Função para extrair hora ignorando fuso horário
   const extrairHoraLocal = (dataHoraStr) => {
     if (!dataHoraStr) return null;
     
     // Caso 1: Formato ISO com Z: "2026-03-20T16:00:00.000Z"
-    // Queremos extrair 16:00 (a hora original sem conversão)
     let match = dataHoraStr.match(/T(\d{2}):(\d{2}):/);
     if (match) {
       return `${match[1]}:${match[2]}`;
@@ -60,14 +78,17 @@ const TimelineAgendamentos = ({
       funcionarioId: usuario?.funcionarioId,
       nome: usuario?.nome 
     });
+    console.log('📅 Timeline - Data selecionada:', format(dataSelecionada, 'yyyy-MM-dd'));
     if (agendamentos?.length > 0) {
-      console.log('📅 Timeline - Teste extração de hora:', agendamentos.slice(0, 3).map(a => ({
+      console.log('📅 Timeline - Agendamentos recebidos:', agendamentos.map(a => ({
         id: a.id,
         data_hora_original: a.data_hora,
-        hora_extraida: extrairHoraLocal(a.data_hora)
+        data_extraida: extrairDataLocal(a.data_hora),
+        hora_extraida: extrairHoraLocal(a.data_hora),
+        status: a.status
       })));
     }
-  }, [profissionais, isFuncionario, usuario, agendamentos]);
+  }, [profissionais, isFuncionario, usuario, agendamentos, dataSelecionada]);
 
   // FILTRO DE PROFISSIONAIS
   const profissionaisFiltrados = React.useMemo(() => {
@@ -75,8 +96,10 @@ const TimelineAgendamentos = ({
     
     if (isFuncionario && usuario?.funcionarioId) {
       const apenasEu = profissionais.filter(prof => prof.id === usuario.funcionarioId);
+      console.log('🔒 Timeline - Profissionais filtrados (só eu):', apenasEu.map(p => p.nome));
       return apenasEu;
     }
+    console.log('🔓 Timeline - Todos profissionais:', profissionais.map(p => p.nome));
     return profissionais;
   }, [profissionais, isFuncionario, usuario]);
 
@@ -88,15 +111,25 @@ const TimelineAgendamentos = ({
     return numero.toFixed(2).replace('.', ',');
   };
 
-  // Aplicar filtros nos agendamentos
+  // Aplicar filtros nos agendamentos (CORRIGIDO - usando extrairDataLocal)
   const agendamentosFiltrados = React.useMemo(() => {
     if (!agendamentos) return [];
     
-    return agendamentos.filter(ag => {
+    const dataSelecionadaStr = format(dataSelecionada, 'yyyy-MM-dd');
+    
+    const filtrados = agendamentos.filter(ag => {
+      // Extrair a data do agendamento sem converter para Date
+      const dataAgendamento = extrairDataLocal(ag.data_hora);
+      
+      // Verificar se é da data selecionada
+      if (dataAgendamento !== dataSelecionadaStr) return false;
+      
+      // Se for funcionário, mostra SÓ os dele
       if (isFuncionario && usuario?.funcionarioId) {
         return ag.funcionario_id === usuario.funcionarioId;
       }
       
+      // Para admin/gerente, aplica os filtros normais
       if (filtroProfissional && filtroProfissional !== 'todos') {
         if (ag.funcionario_id !== parseInt(filtroProfissional)) return false;
       }
@@ -105,7 +138,21 @@ const TimelineAgendamentos = ({
       }
       return true;
     });
-  }, [agendamentos, isFuncionario, usuario, filtroProfissional, filtroServico]);
+    
+    console.log('✅ Timeline - Agendamentos após filtros:', {
+      total: filtrados.length,
+      dataSelecionada: dataSelecionadaStr,
+      detalhes: filtrados.map(a => ({
+        id: a.id,
+        data_hora: a.data_hora,
+        data_extraida: extrairDataLocal(a.data_hora),
+        hora_extraida: extrairHoraLocal(a.data_hora),
+        status: a.status
+      }))
+    });
+    
+    return filtrados;
+  }, [agendamentos, dataSelecionada, isFuncionario, usuario, filtroProfissional, filtroServico]);
 
   // Usar horários das configurações ou fallback
   const horarios = React.useMemo(() => {
@@ -278,10 +325,7 @@ const TimelineAgendamentos = ({
                 {profissionaisFiltrados.map((prof) => {
                   const agendamento = agendamentosFiltrados.find(ag => {
                     if (!ag?.data_hora) return false;
-                    
                     const horaAgendamento = extrairHoraLocal(ag.data_hora);
-                    if (!horaAgendamento) return false;
-                    
                     return ag.funcionario_id === prof.id && horaAgendamento === hora;
                   });
 
