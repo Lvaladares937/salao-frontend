@@ -70,7 +70,7 @@ const TimelineAgendamentos = ({
     return null;
   };
 
-  // LOG PARA DEBUG
+  // LOG PARA DEBUG DETALHADO
   useEffect(() => {
     console.log('📊 Timeline - Profissionais recebidos:', profissionais?.map(p => ({ id: p.id, nome: p.nome })));
     console.log('👤 Timeline - Usuário:', { 
@@ -78,15 +78,20 @@ const TimelineAgendamentos = ({
       funcionarioId: usuario?.funcionarioId,
       nome: usuario?.nome 
     });
-    console.log('📅 Timeline - Data selecionada:', format(dataSelecionada, 'yyyy-MM-dd'));
+    console.log('📅 Timeline - Data selecionada STRING:', format(dataSelecionada, 'yyyy-MM-dd'));
+    console.log('📅 Timeline - Data selecionada OBJETO:', dataSelecionada);
+    
     if (agendamentos?.length > 0) {
-      console.log('📅 Timeline - Agendamentos recebidos:', agendamentos.map(a => ({
+      console.log('📅 Timeline - Agendamentos recebidos DETALHADOS:', agendamentos.map(a => ({
         id: a.id,
         data_hora_original: a.data_hora,
         data_extraida: extrairDataLocal(a.data_hora),
         hora_extraida: extrairHoraLocal(a.data_hora),
-        status: a.status
+        status: a.status,
+        profissional_id: a.funcionario_id
       })));
+    } else {
+      console.log('⚠️ Timeline - Nenhum agendamento recebido!');
     }
   }, [profissionais, isFuncionario, usuario, agendamentos, dataSelecionada]);
 
@@ -111,45 +116,61 @@ const TimelineAgendamentos = ({
     return numero.toFixed(2).replace('.', ',');
   };
 
-  // Aplicar filtros nos agendamentos (CORRIGIDO - usando extrairDataLocal)
+  // Aplicar filtros nos agendamentos (COM LOGS DETALHADOS)
   const agendamentosFiltrados = React.useMemo(() => {
     if (!agendamentos) return [];
     
     const dataSelecionadaStr = format(dataSelecionada, 'yyyy-MM-dd');
     
+    console.log('🔍 FILTRANDO AGENDAMENTOS:');
+    console.log('   Data selecionada:', dataSelecionadaStr);
+    console.log('   Total de agendamentos recebidos:', agendamentos.length);
+    
     const filtrados = agendamentos.filter(ag => {
       // Extrair a data do agendamento sem converter para Date
       const dataAgendamento = extrairDataLocal(ag.data_hora);
       
-      // Verificar se é da data selecionada
-      if (dataAgendamento !== dataSelecionadaStr) return false;
+      const matchData = dataAgendamento === dataSelecionadaStr;
+      
+      console.log(`   Agendamento ID ${ag.id}:`, {
+        data_hora_original: ag.data_hora,
+        data_extraida: dataAgendamento,
+        data_selecionada: dataSelecionadaStr,
+        match_data: matchData,
+        status: ag.status
+      });
+      
+      if (!matchData) return false;
       
       // Se for funcionário, mostra SÓ os dele
       if (isFuncionario && usuario?.funcionarioId) {
-        return ag.funcionario_id === usuario.funcionarioId;
+        const matchProf = ag.funcionario_id === usuario.funcionarioId;
+        console.log(`      Match profissional: ${matchProf} (ag:${ag.funcionario_id} vs user:${usuario.funcionarioId})`);
+        if (!matchProf) return false;
       }
       
       // Para admin/gerente, aplica os filtros normais
       if (filtroProfissional && filtroProfissional !== 'todos') {
-        if (ag.funcionario_id !== parseInt(filtroProfissional)) return false;
+        const matchFiltro = ag.funcionario_id === parseInt(filtroProfissional);
+        console.log(`      Match filtro profissional: ${matchFiltro}`);
+        if (!matchFiltro) return false;
       }
       if (filtroServico && filtroServico !== 'todos') {
-        if (ag.servico_id !== parseInt(filtroServico)) return false;
+        const matchServico = ag.servico_id === parseInt(filtroServico);
+        console.log(`      Match filtro serviço: ${matchServico}`);
+        if (!matchServico) return false;
       }
+      
       return true;
     });
     
-    console.log('✅ Timeline - Agendamentos após filtros:', {
-      total: filtrados.length,
-      dataSelecionada: dataSelecionadaStr,
-      detalhes: filtrados.map(a => ({
-        id: a.id,
-        data_hora: a.data_hora,
-        data_extraida: extrairDataLocal(a.data_hora),
-        hora_extraida: extrairHoraLocal(a.data_hora),
-        status: a.status
-      }))
-    });
+    console.log('✅ AGENDAMENTOS FILTRADOS:', filtrados.map(a => ({
+      id: a.id,
+      status: a.status,
+      data_hora: a.data_hora,
+      data_extraida: extrairDataLocal(a.data_hora),
+      hora_extraida: extrairHoraLocal(a.data_hora)
+    })));
     
     return filtrados;
   }, [agendamentos, dataSelecionada, isFuncionario, usuario, filtroProfissional, filtroServico]);
