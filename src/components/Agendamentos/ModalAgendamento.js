@@ -176,27 +176,34 @@ const ModalAgendamento = ({
     setMostrarDropdownCliente(true);
   };
 
+  // No ModalAgendamento.js, substitua a função handleSalvar por esta:
+  
   const handleSalvar = async () => {
+    // Verificar se é um agendamento concluído
     const statusMudouParaConcluido = 
       agendamentoSelecionado && 
       formData.status === 'concluido' && 
       statusAnterior !== 'concluido';
-
+  
+    // Se for concluído, validar forma de pagamento
     if (formData.status === 'concluido' && !formaPagamento) {
       alert('Selecione a forma de pagamento');
       return;
     }
-
+  
+    // Se for cartão de crédito parcelado, validar parcelas
     if (formaPagamento === 'credito_parcelado' && (!parcelas || parcelas < 1)) {
       alert('Selecione o número de parcelas');
       return;
     }
-
+  
+    // Se for cartão (débito ou crédito), validar bandeira
     if ((formaPagamento === 'debito' || formaPagamento === 'credito' || formaPagamento === 'credito_parcelado') && !bandeiraCartao) {
       alert('Selecione a bandeira do cartão');
       return;
     }
-
+  
+    // Preparar dados do pagamento
     const dadosPagamento = {
       forma_pagamento: formaPagamento,
       bandeira_cartao: bandeiraCartao || null,
@@ -206,9 +213,11 @@ const ModalAgendamento = ({
       percentual_comissao: percentualComissao,
       data_pagamento: new Date().toISOString()
     };
-
+  
+    // Chamar a função de salvar original
     await onSalvar(dadosPagamento);
-
+  
+    // Se o status mudou para concluído, disparar evento
     if (statusMudouParaConcluido) {
       const evento = new CustomEvent('agendamentoConcluido', {
         detail: {
@@ -226,7 +235,8 @@ const ModalAgendamento = ({
       
       console.log('🎉 Evento agendamentoConcluido disparado!', evento.detail);
     }
-
+  
+    // Resetar estado de pagamento
     setMostrarPagamento(false);
     setPagamentoRegistrado(true);
   };
