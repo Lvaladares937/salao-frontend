@@ -102,12 +102,12 @@ const ModalAgendamento = ({
     }
   }, [show]);
 
-  // Gerar horários disponíveis baseados nas configurações (apenas para novo agendamento)
+  // Gerar horários disponíveis baseados nas configurações
   useEffect(() => {
-    if (!agendamentoSelecionado && formData.data) {
+    if (formData.data) {
       setHorariosDoDia(horariosDisponiveis);
     }
-  }, [formData.data, horariosDisponiveis, agendamentoSelecionado]);
+  }, [formData.data, horariosDisponiveis]);
 
   // Atualizar serviço selecionado quando mudar
   useEffect(() => {
@@ -404,29 +404,20 @@ const ModalAgendamento = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Horário *
               </label>
-              {isEdicao ? (
-                // Modo edição: mostra o horário como texto fixo
-                <div className="input-field bg-gray-100 cursor-not-allowed flex items-center justify-between">
-                  <span>{formData.hora || '--:--'}</span>
-                  <Clock className="w-4 h-4 text-gray-400" />
-                </div>
-              ) : (
-                // Modo criação: select para escolher horário
-                <select
-                  className="input-field"
-                  value={formData.hora || ''}
-                  onChange={(e) => setFormData({...formData, hora: e.target.value})}
-                  required
-                  disabled={!formData.profissionalId || !formData.data}
-                >
-                  <option value="" disabled>Selecione um horário</option>
-                  {horariosDoDia.map(horario => (
-                    <option key={horario} value={horario}>
-                      {horario}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <select
+                className="input-field"
+                value={formData.hora}
+                onChange={(e) => setFormData({...formData, hora: e.target.value})}
+                required
+                disabled={isEdicao || !formData.profissionalId || !formData.data}
+              >
+                <option value="" disabled>Selecione um horário</option>
+                {horariosDoDia.map(horario => (
+                  <option key={horario} value={horario}>
+                    {horario}
+                  </option>
+                ))}
+              </select>
               {!isEdicao && loading && (
                 <p className="text-xs text-gray-500 mt-1">Carregando horários...</p>
               )}
@@ -592,7 +583,7 @@ const ModalAgendamento = ({
             onClick={handleSalvar}
             className="btn-primary"
           >
-            {agendamentoSelecionado ? 'Salvar Alterações' : 'Criar Agendamento'}
+            {isEdicao ? 'Salvar Alterações' : 'Criar Agendamento'}
           </button>
         </div>
       </div>
