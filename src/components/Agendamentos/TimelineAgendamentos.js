@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Clock, Plus, ChevronLeft, ChevronRight, User } from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { getStatusColor } from './helpers';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 import { useAuth } from '../../contexts/AuthContext';
@@ -50,39 +50,14 @@ const TimelineAgendamentos = ({
     return null;
   };
 
-  // TESTE FORÇADO - LOG DOS AGENDAMENTOS
-  useEffect(() => {
-    console.log('🚨 FORÇANDO LOG DOS AGENDAMENTOS:');
-    console.log('Agendamentos recebidos:', agendamentos);
-    console.log('Data selecionada:', dataSelecionada);
-    console.log('Data selecionada formatada:', format(dataSelecionada, 'yyyy-MM-dd'));
-    
-    if (agendamentos && agendamentos.length > 0) {
-      agendamentos.forEach(ag => {
-        const dataStr = ag.data_hora;
-        const dataExtraida = extrairDataLocal(dataStr);
-        console.log(`Agendamento ${ag.id}:`, {
-          original: dataStr,
-          data_extraida: dataExtraida,
-          status: ag.status,
-          profissional_id: ag.funcionario_id
-        });
-      });
-    } else {
-      console.log('⚠️ Nenhum agendamento recebido!');
-    }
-  }, [agendamentos, dataSelecionada]);
-
   // FILTRO DE PROFISSIONAIS
   const profissionaisFiltrados = React.useMemo(() => {
     if (!profissionais) return [];
     
     if (isFuncionario && usuario?.funcionarioId) {
       const apenasEu = profissionais.filter(prof => prof.id === usuario.funcionarioId);
-      console.log('🔒 Timeline - Profissionais filtrados (só eu):', apenasEu.map(p => p.nome));
       return apenasEu;
     }
-    console.log('🔓 Timeline - Todos profissionais:', profissionais.map(p => p.nome));
     return profissionais;
   }, [profissionais, isFuncionario, usuario]);
 
@@ -100,15 +75,8 @@ const TimelineAgendamentos = ({
     
     const dataSelecionadaStr = format(dataSelecionada, 'yyyy-MM-dd');
     
-    console.log('🔍 FILTRANDO AGENDAMENTOS:');
-    console.log('   Data selecionada:', dataSelecionadaStr);
-    console.log('   Total de agendamentos:', agendamentos.length);
-    
     const filtrados = agendamentos.filter(ag => {
       const dataAgendamento = extrairDataLocal(ag.data_hora);
-      
-      console.log(`   Agendamento ${ag.id}: data_extraida=${dataAgendamento} vs data_selecionada=${dataSelecionadaStr} = ${dataAgendamento === dataSelecionadaStr}`);
-      
       if (dataAgendamento !== dataSelecionadaStr) return false;
       
       if (isFuncionario && usuario?.funcionarioId) {
@@ -124,20 +92,16 @@ const TimelineAgendamentos = ({
       return true;
     });
     
-    console.log('✅ AGENDAMENTOS FILTRADOS:', filtrados.length);
-    filtrados.forEach(ag => {
-      console.log(`   ID ${ag.id}: status=${ag.status}, hora=${extrairHoraLocal(ag.data_hora)}`);
-    });
-    
     return filtrados;
   }, [agendamentos, dataSelecionada, isFuncionario, usuario, filtroProfissional, filtroServico]);
 
-  // Usar horários das configurações ou fallback
+  // Usar horários das configurações ou fallback (CORRIGIDO - inclui horários a partir das 07:00)
   const horarios = React.useMemo(() => {
     if (loading || !horariosDisponiveis?.length) {
-      return ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', 
-              '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', 
-              '17:00', '17:30', '18:00', '18:30', '19:00'];
+      // Horários das 07:00 às 19:00
+      return ['07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', 
+              '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', 
+              '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'];
     }
     return horariosDisponiveis;
   }, [horariosDisponiveis, loading]);
@@ -365,7 +329,7 @@ const TimelineAgendamentos = ({
 
       {profissionaisFiltrados.length > 1 && (
         <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 bg-gray-50/50">
-          ← Arraste para o lado para ver mais profissionais (clique nos agendamentos para editar) →
+          ← Arraste para o lado para ver mais profissionais →
         </div>
       )}
 
