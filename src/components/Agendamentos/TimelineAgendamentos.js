@@ -26,49 +26,27 @@ const TimelineAgendamentos = ({
   
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
-  // Função para extrair hora ignorando fuso horário
+  // Função para extrair hora ignorando fuso horário - VERSÃO CORRIGIDA
   const extrairHoraLocal = (dataHoraStr) => {
     if (!dataHoraStr) return null;
     
-    // Se a string tem formato ISO com Z (UTC)
-    if (dataHoraStr.includes('Z')) {
-      // Remove o Z e o milissegundos se houver
-      let cleanStr = dataHoraStr.replace('Z', '');
-      if (cleanStr.includes('.')) {
-        cleanStr = cleanStr.split('.')[0];
-      }
-      // Pega a parte da hora diretamente da string, sem converter para Date
-      const match = cleanStr.match(/(\d{2}):(\d{2})/);
-      if (match) {
-        return `${match[1]}:${match[2]}`;
-      }
+    // Caso 1: Formato ISO com Z: "2026-03-20T16:00:00.000Z"
+    // Queremos extrair 16:00 (a hora original sem conversão)
+    let match = dataHoraStr.match(/T(\d{2}):(\d{2}):/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
     }
     
-    // Se for formato "2026-03-20T16:00:00"
-    if (dataHoraStr.includes('T')) {
-      const match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
-      if (match) {
-        return `${match[1]}:${match[2]}`;
-      }
+    // Caso 2: Formato com espaço: "2026-03-20 16:00:00"
+    match = dataHoraStr.match(/\s(\d{2}):(\d{2}):/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
     }
     
-    // Se for formato "2026-03-20 16:00:00"
-    if (dataHoraStr.includes(' ')) {
-      const match = dataHoraStr.match(/\s(\d{2}):(\d{2})/);
-      if (match) {
-        return `${match[1]}:${match[2]}`;
-      }
-    }
-    
-    // Fallback: tentar com Date (mas vai ter problema de fuso)
-    try {
-      const date = new Date(dataHoraStr);
-      if (!isNaN(date.getTime())) {
-        return date.getHours().toString().padStart(2, '0') + ':' + 
-               date.getMinutes().toString().padStart(2, '0');
-      }
-    } catch (e) {
-      console.error('Erro ao extrair hora:', dataHoraStr, e);
+    // Caso 3: Apenas hora: "16:00"
+    match = dataHoraStr.match(/^(\d{2}):(\d{2})$/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
     }
     
     return null;
@@ -82,7 +60,6 @@ const TimelineAgendamentos = ({
       funcionarioId: usuario?.funcionarioId,
       nome: usuario?.nome 
     });
-    console.log('📅 Timeline - Agendamentos recebidos:', agendamentos?.length);
     if (agendamentos?.length > 0) {
       console.log('📅 Timeline - Teste extração de hora:', agendamentos.slice(0, 3).map(a => ({
         id: a.id,
@@ -92,16 +69,14 @@ const TimelineAgendamentos = ({
     }
   }, [profissionais, isFuncionario, usuario, agendamentos]);
 
-  // FILTRO DE PROFISSIONAIS - FORÇADO para funcionário
+  // FILTRO DE PROFISSIONAIS
   const profissionaisFiltrados = React.useMemo(() => {
     if (!profissionais) return [];
     
     if (isFuncionario && usuario?.funcionarioId) {
       const apenasEu = profissionais.filter(prof => prof.id === usuario.funcionarioId);
-      console.log('🔒 Timeline - Profissionais filtrados (só eu):', apenasEu.map(p => p.nome));
       return apenasEu;
     }
-    console.log('🔓 Timeline - Todos profissionais:', profissionais.map(p => p.nome));
     return profissionais;
   }, [profissionais, isFuncionario, usuario]);
 
@@ -132,18 +107,6 @@ const TimelineAgendamentos = ({
     });
   }, [agendamentos, isFuncionario, usuario, filtroProfissional, filtroServico]);
 
-  // Log dos agendamentos após filtros
-  useEffect(() => {
-    if (agendamentosFiltrados.length > 0) {
-      console.log('✅ Timeline - Agendamentos após filtros:', agendamentosFiltrados.map(a => ({
-        id: a.id,
-        data_hora_original: a.data_hora,
-        hora_corrigida: extrairHoraLocal(a.data_hora),
-        profissional_id: a.funcionario_id
-      })));
-    }
-  }, [agendamentosFiltrados]);
-
   // Usar horários das configurações ou fallback
   const horarios = React.useMemo(() => {
     if (loading || !horariosDisponiveis?.length) {
@@ -154,7 +117,7 @@ const TimelineAgendamentos = ({
     return horariosDisponiveis;
   }, [horariosDisponiveis, loading]);
 
-  // Funções para controlar o scroll e as setas
+  // Funções para controlar o scroll
   const checkScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -316,9 +279,7 @@ const TimelineAgendamentos = ({
                   const agendamento = agendamentosFiltrados.find(ag => {
                     if (!ag?.data_hora) return false;
                     
-                    // Extrair hora da string original (sem conversão de fuso)
                     const horaAgendamento = extrairHoraLocal(ag.data_hora);
-                    
                     if (!horaAgendamento) return false;
                     
                     return ag.funcionario_id === prof.id && horaAgendamento === hora;
