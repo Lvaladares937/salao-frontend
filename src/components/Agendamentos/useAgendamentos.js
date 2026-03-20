@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import agendamentosService from '../../services/agendamentosService';
 import funcionariosService from '../../services/funcionariosService';
@@ -79,7 +79,6 @@ export const useAgendamentos = () => {
       
       setFuncionarios(data);
       
-      // FILTRO FORÇADO - SÓ O FUNCIONÁRIO LOGADO
       if (isFuncionario && usuario?.funcionarioId) {
         const apenasOMeu = data.filter(f => f.id === usuario.funcionarioId);
         console.log('✅ FUNCIONÁRIO FILTRADO - SÓ EU:', apenasOMeu.map(f => f.nome));
@@ -98,7 +97,6 @@ export const useAgendamentos = () => {
     try {
       const data = await clientesService.listar();
       
-      // SE FOR FUNCIONÁRIO, REMOVE DADOS SENSÍVEIS
       if (isFuncionario) {
         setClientes(data.map(cliente => ({
           id: cliente.id,
@@ -132,18 +130,15 @@ export const useAgendamentos = () => {
       
       let data = [];
       
-      // SE FOR FUNCIONÁRIO, BUSCA SÓ OS DELE (SEM FILTRO DE DATA)
       if (isFuncionario && usuario?.funcionarioId) {
-        console.log(`🔍 Buscando agendamentos do funcionário ID: ${usuario.funcionarioId} (sem filtro de data)`);
+        console.log(`🔍 Buscando agendamentos do funcionário ID: ${usuario.funcionarioId}`);
         data = await agendamentosService.buscarPorFuncionarioPeriodo(
           usuario.funcionarioId,
           null,
           null
         );
         console.log(`✅ Encontrados ${data.length} agendamentos para este funcionário`);
-      } 
-      // ADMIN E GERENTE VEEM TODOS
-      else {
+      } else {
         console.log('🔍 Buscando todos os agendamentos');
         data = await agendamentosService.listar();
         console.log(`✅ Total de agendamentos: ${data.length}`);
@@ -174,11 +169,10 @@ export const useAgendamentos = () => {
     carregarDadosIniciais();
   }, []);
 
-  // FILTRO POR PROFISSIONAL E SERVIÇO (apenas para admin/gerente)
+  // FILTRO POR PROFISSIONAL E SERVIÇO
   useEffect(() => {
     if (!agendamentos.length) return;
     
-    // Se for funcionário, ignora os filtros (já vem só os dele)
     if (isFuncionario) {
       setAgendamentosFiltrados(agendamentos);
       return;
@@ -186,14 +180,12 @@ export const useAgendamentos = () => {
     
     let filtrados = agendamentos;
     
-    // Aplicar filtro de profissional
     if (filtroProfissional !== 'todos') {
       filtrados = filtrados.filter(
         ag => ag.funcionario_id === parseInt(filtroProfissional)
       );
     }
     
-    // Aplicar filtro de serviço
     if (filtroServico !== 'todos') {
       filtrados = filtrados.filter(
         ag => ag.servico_id === parseInt(filtroServico)
@@ -202,32 +194,6 @@ export const useAgendamentos = () => {
     
     setAgendamentosFiltrados(filtrados);
   }, [agendamentos, filtroProfissional, filtroServico, isFuncionario]);
-
-  // FILTRO POR DATA SELECIONADA
-  const agendamentosPorData = useMemo(() => {
-    if (!agendamentosFiltrados || !dataSelecionada) return [];
-    
-    const dataSelecionadaStr = format(dataSelecionada, 'yyyy-MM-dd');
-    
-    const filtrados = agendamentosFiltrados.filter(agendamento => {
-      if (!agendamento.data_hora) return false;
-      
-      let dataAgendamento = agendamento.data_hora;
-      
-      if (dataAgendamento.includes('T')) {
-        dataAgendamento = dataAgendamento.split('T')[0];
-      }
-      if (dataAgendamento.includes(' ')) {
-        dataAgendamento = dataAgendamento.split(' ')[0];
-      }
-      
-      return dataAgendamento === dataSelecionadaStr;
-    });
-    
-    console.log(`📅 Agendamentos para ${dataSelecionadaStr}: ${filtrados.length}`);
-    
-    return filtrados;
-  }, [agendamentosFiltrados, dataSelecionada]);
 
   // Função para abrir novo agendamento
   const abrirNovoAgendamento = (profissionalId = null, horario = null) => {
@@ -251,7 +217,7 @@ export const useAgendamentos = () => {
     setShowModal(true);
   };
 
-  // Abrir editar agendamento com verificação rigorosa
+  // Abrir editar agendamento
   const abrirEditarAgendamento = (agendamento) => {
     console.log('🔍 VERIFICAÇÃO DE EDIÇÃO:');
     console.log('   Agendamento ID:', agendamento.id);
@@ -289,7 +255,7 @@ export const useAgendamentos = () => {
     setShowModal(true);
   };
 
-  // Função para salvar agendamento (CORRIGIDA - SEM VERIFICAÇÃO DE DISPONIBILIDADE)
+  // Função para salvar agendamento (ORIGINAL)
   const salvarAgendamento = async (dadosPagamento) => {
     console.log('📝 Salvando agendamento:', formData);
     
@@ -317,7 +283,6 @@ export const useAgendamentos = () => {
       return;
     }
 
-    // VERIFICAÇÃO DE SEGURANÇA NO SALVAMENTO
     if (isFuncionario && agendamentoSelecionado) {
       if (agendamentoSelecionado.funcionario_id !== usuario?.funcionarioId) {
         alert('Você só pode editar seus próprios agendamentos!');
@@ -325,7 +290,6 @@ export const useAgendamentos = () => {
       }
     }
 
-    // CALCULAR COMISSÃO
     const percentualComissao = calcularComissaoServico(servico, profissional);
     const valorComissao = servico.preco * (percentualComissao / 100);
     
@@ -467,7 +431,7 @@ export const useAgendamentos = () => {
     setFiltroProfissional,
     filtroServico,
     setFiltroServico,
-    agendamentos: agendamentosPorData,
+    agendamentos: agendamentosFiltrados,
     todosAgendamentos: agendamentos,
     formData,
     setFormData,
