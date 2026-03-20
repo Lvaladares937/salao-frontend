@@ -102,12 +102,20 @@ const ModalAgendamento = ({
     }
   }, [show]);
 
-  // Gerar horários disponíveis baseados nas configurações
+  // Gerar horários disponíveis (NÃO ALTERA O HORÁRIO)
   useEffect(() => {
     if (formData.data) {
       setHorariosDoDia(horariosDisponiveis);
     }
   }, [formData.data, horariosDisponiveis]);
+
+  // LOG para verificar horário
+  useEffect(() => {
+    if (agendamentoSelecionado) {
+      console.log('🕒 Modal - Horário do agendamento:', formData.hora);
+      console.log('🕒 Modal - Data do agendamento:', formData.data);
+    }
+  }, [agendamentoSelecionado, formData.hora, formData.data]);
 
   // Atualizar serviço selecionado quando mudar
   useEffect(() => {
@@ -129,7 +137,7 @@ const ModalAgendamento = ({
     }
   }, [formData.profissionalId, profissionais]);
 
-  // Calcular comissão baseada no serviço e profissional
+  // Calcular comissão
   useEffect(() => {
     if (servicoSelecionado && profissionalSelecionado) {
       const percComissao = servicoSelecionado.comissao_percentual || 
@@ -146,14 +154,14 @@ const ModalAgendamento = ({
     }
   }, [servicoSelecionado, profissionalSelecionado]);
 
-  // Salvar o status anterior quando o modal abrir
+  // Salvar status anterior
   useEffect(() => {
     if (agendamentoSelecionado) {
       setStatusAnterior(agendamentoSelecionado.status);
     }
   }, [agendamentoSelecionado, show]);
 
-  // Quando o status muda para concluído, mostrar opções de pagamento
+  // Mostrar pagamento quando status for concluído
   useEffect(() => {
     if (formData.status === 'concluido') {
       setMostrarPagamento(true);
@@ -230,9 +238,6 @@ const ModalAgendamento = ({
   };
 
   if (!show) return null;
-
-  // Verificar se o horário atual está na lista de horários disponíveis
-  const horarioAtualEstaDisponivel = horariosDoDia.includes(formData.hora);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -407,12 +412,6 @@ const ModalAgendamento = ({
                 disabled={!formData.profissionalId || !formData.data}
               >
                 <option value="" disabled>Selecione um horário</option>
-                {/* Se o horário atual não estiver na lista, adiciona ele como opção */}
-                {formData.hora && !horarioAtualEstaDisponivel && (
-                  <option value={formData.hora} className="bg-yellow-100">
-                    {formData.hora} (horário atual)
-                  </option>
-                )}
                 {horariosDoDia.map(horario => (
                   <option key={horario} value={horario}>
                     {horario}
@@ -421,11 +420,6 @@ const ModalAgendamento = ({
               </select>
               {loading && (
                 <p className="text-xs text-gray-500 mt-1">Carregando horários...</p>
-              )}
-              {formData.profissionalId && formData.data && horariosDoDia.length === 0 && !loading && (
-                <p className="text-xs text-red-500 mt-1">
-                  ⚠️ Não há horários disponíveis para este profissional nesta data
-                </p>
               )}
               {config && config.intervaloMinutos && (
                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
