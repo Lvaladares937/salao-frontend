@@ -28,7 +28,7 @@ const ModalAgendamento = ({
   const [pagamentoRegistrado, setPagamentoRegistrado] = useState(false);
   const [horariosDoDia, setHorariosDoDia] = useState([]);
   
-  // NOVOS STATES PARA BUSCA DE CLIENTE
+  // States para busca de cliente
   const [buscaCliente, setBuscaCliente] = useState('');
   const [mostrarDropdownCliente, setMostrarDropdownCliente] = useState(false);
   const [clientesFiltrados, setClientesFiltrados] = useState([]);
@@ -67,7 +67,7 @@ const ModalAgendamento = ({
     { id: 'fiado', nome: 'Fiado (Crediário)' }
   ];
 
-  // FILTRO DE CLIENTES - ADICIONADO
+  // Filtrar clientes
   useEffect(() => {
     if (!clientes) return;
     
@@ -82,7 +82,7 @@ const ModalAgendamento = ({
     }
   }, [buscaCliente, clientes]);
 
-  // CARREGAR CLIENTE QUANDO EDITAR - ADICIONADO
+  // Carregar cliente ao editar
   useEffect(() => {
     if (agendamentoSelecionado && agendamentoSelecionado.cliente_id && clientes.length > 0) {
       const clienteEncontrado = clientes.find(c => c.id === agendamentoSelecionado.cliente_id);
@@ -94,7 +94,7 @@ const ModalAgendamento = ({
     }
   }, [agendamentoSelecionado, clientes]);
 
-  // RESETAR BUSCA QUANDO FECHAR MODAL - ADICIONADO
+  // Resetar busca ao fechar
   useEffect(() => {
     if (!show) {
       setBuscaCliente('');
@@ -102,14 +102,14 @@ const ModalAgendamento = ({
     }
   }, [show]);
 
-  // Gerar horários disponíveis baseados nas configurações
+  // Gerar horários disponíveis
   useEffect(() => {
     if (formData.data) {
       setHorariosDoDia(horariosDisponiveis);
     }
   }, [formData.data, horariosDisponiveis]);
 
-  // Atualizar serviço selecionado quando mudar
+  // Atualizar serviço selecionado
   useEffect(() => {
     if (formData.servicoId) {
       const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
@@ -129,7 +129,7 @@ const ModalAgendamento = ({
     }
   }, [formData.profissionalId, profissionais]);
 
-  // Calcular comissão baseada no serviço e profissional
+  // Calcular comissão
   useEffect(() => {
     if (servicoSelecionado && profissionalSelecionado) {
       const percComissao = servicoSelecionado.comissao_percentual || 
@@ -146,14 +146,14 @@ const ModalAgendamento = ({
     }
   }, [servicoSelecionado, profissionalSelecionado]);
 
-  // Salvar o status anterior quando o modal abrir
+  // Salvar status anterior
   useEffect(() => {
     if (agendamentoSelecionado) {
       setStatusAnterior(agendamentoSelecionado.status);
     }
   }, [agendamentoSelecionado, show]);
 
-  // Quando o status muda para concluído, mostrar opções de pagamento
+  // Mostrar pagamento quando status for concluído
   useEffect(() => {
     if (formData.status === 'concluido') {
       setMostrarPagamento(true);
@@ -162,48 +162,39 @@ const ModalAgendamento = ({
     }
   }, [formData.status]);
 
-  // FUNÇÃO PARA SELECIONAR CLIENTE - ADICIONADA
   const selecionarCliente = (cliente) => {
     setFormData({...formData, clienteId: cliente.id});
     setBuscaCliente(cliente.nome);
     setMostrarDropdownCliente(false);
   };
 
-  // FUNÇÃO PARA LIMPAR BUSCA - ADICIONADA
   const limparBuscaCliente = () => {
     setBuscaCliente('');
     setFormData({...formData, clienteId: ''});
     setMostrarDropdownCliente(true);
   };
 
-  // No ModalAgendamento.js, substitua a função handleSalvar por esta:
-  
   const handleSalvar = async () => {
-    // Verificar se é um agendamento concluído
     const statusMudouParaConcluido = 
       agendamentoSelecionado && 
       formData.status === 'concluido' && 
       statusAnterior !== 'concluido';
-  
-    // Se for concluído, validar forma de pagamento
+
     if (formData.status === 'concluido' && !formaPagamento) {
       alert('Selecione a forma de pagamento');
       return;
     }
-  
-    // Se for cartão de crédito parcelado, validar parcelas
+
     if (formaPagamento === 'credito_parcelado' && (!parcelas || parcelas < 1)) {
       alert('Selecione o número de parcelas');
       return;
     }
-  
-    // Se for cartão (débito ou crédito), validar bandeira
+
     if ((formaPagamento === 'debito' || formaPagamento === 'credito' || formaPagamento === 'credito_parcelado') && !bandeiraCartao) {
       alert('Selecione a bandeira do cartão');
       return;
     }
-  
-    // Preparar dados do pagamento
+
     const dadosPagamento = {
       forma_pagamento: formaPagamento,
       bandeira_cartao: bandeiraCartao || null,
@@ -213,11 +204,9 @@ const ModalAgendamento = ({
       percentual_comissao: percentualComissao,
       data_pagamento: new Date().toISOString()
     };
-  
-    // Chamar a função de salvar original
+
     await onSalvar(dadosPagamento);
-  
-    // Se o status mudou para concluído, disparar evento
+
     if (statusMudouParaConcluido) {
       const evento = new CustomEvent('agendamentoConcluido', {
         detail: {
@@ -235,8 +224,7 @@ const ModalAgendamento = ({
       
       console.log('🎉 Evento agendamentoConcluido disparado!', evento.detail);
     }
-  
-    // Resetar estado de pagamento
+
     setMostrarPagamento(false);
     setPagamentoRegistrado(true);
   };
@@ -259,7 +247,7 @@ const ModalAgendamento = ({
         </div>
         
         <div className="p-6 space-y-4">
-          {/* Cliente COM BUSCA - SUBSTITUÍDO */}
+          {/* Cliente COM BUSCA */}
           <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cliente *
@@ -293,7 +281,6 @@ const ModalAgendamento = ({
               )}
             </div>
             
-            {/* Dropdown de clientes */}
             {mostrarDropdownCliente && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {clientesFiltrados.length > 0 ? (
