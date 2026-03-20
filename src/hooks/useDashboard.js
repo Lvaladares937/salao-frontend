@@ -24,6 +24,12 @@ export const useDashboard = () => {
   const [agendamentosRecentes, setAgendamentosRecentes] = useState([]);
   const [alertas, setAlertas] = useState([]);
 
+  // Função auxiliar para extrair data da venda (lida com diferentes nomes de campo)
+  const extrairDataVenda = (venda) => {
+    if (!venda) return null;
+    return venda.data_venda || venda.data_pagamento || venda.created_at || venda.data || venda.data_pagamento;
+  };
+
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
@@ -48,6 +54,9 @@ export const useDashboard = () => {
       fimSemana.setHours(23, 59, 59, 999);
       
       console.log('📅 Períodos calculados');
+      console.log(`   Data hoje: ${hoje.toLocaleDateString()}`);
+      console.log(`   Início semana: ${inicioSemana.toLocaleDateString()}`);
+      console.log(`   Fim semana: ${fimSemana.toLocaleDateString()}`);
 
       // ========== 1. BUSCAR AGENDAMENTOS DO DIA ==========
       let agendamentosHoje = [];
@@ -73,7 +82,7 @@ export const useDashboard = () => {
         console.error('❌ Erro ao buscar agendamentos semana:', error);
       }
 
-      // ========== 3. BUSCAR VENDAS DO FINANCEIRO (JÁ INCLUI TUDO) ==========
+      // ========== 3. BUSCAR VENDAS DO FINANCEIRO ==========
       let vendas = [];
       try {
         vendas = await financeiroService.listarVendas(
@@ -83,7 +92,14 @@ export const useDashboard = () => {
         console.log(`💰 Vendas do financeiro: ${vendas.length}`);
         
         if (vendas.length > 0) {
-          console.log('💰 Primeira venda:', vendas[0]);
+          console.log('💰 Estrutura da primeira venda:', {
+            id: vendas[0].id,
+            valor_total: vendas[0].valor_total,
+            data_venda: vendas[0]?.data_venda,
+            data_pagamento: vendas[0]?.data_pagamento,
+            created_at: vendas[0]?.created_at,
+            forma_pagamento: vendas[0]?.forma_pagamento
+          });
         }
       } catch (error) {
         console.error('❌ Erro ao buscar vendas:', error);
@@ -110,10 +126,11 @@ export const useDashboard = () => {
       console.log(`   Vendas: ${vendas.length}`);
       console.log(`   Estoque baixo: ${estoque.length}`);
 
-      // Calcular vendas de HOJE
+      // ========== CALCULAR VENDAS DE HOJE ==========
       const vendasHoje = vendas.filter(v => {
-        const dataVenda = v.data_venda;
-        return dataVenda && new Date(dataVenda).toDateString() === hoje.toDateString();
+        const dataVenda = extrairDataVenda(v);
+        if (!dataVenda) return false;
+        return new Date(dataVenda).toDateString() === hoje.toDateString();
       });
       
       const totalVendasHoje = vendasHoje.reduce((acc, v) => acc + (parseFloat(v.valor_total) || 0), 0);
@@ -135,14 +152,18 @@ export const useDashboard = () => {
         ticketMedio
       });
 
-      // Calcular vendas por dia da semana
+      // ========== CALCULAR VENDAS POR DIA DA SEMANA ==========
       const diasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
       const vendasPorDia = diasSemana.map((dia, index) => {
         const data = new Date(inicioSemana);
         data.setDate(inicioSemana.getDate() + index);
         
         const vendasDia = vendas
-          .filter(v => v && v.data_venda && new Date(v.data_venda).toDateString() === data.toDateString())
+          .filter(v => {
+            const dataVenda = extrairDataVenda(v);
+            if (!dataVenda) return false;
+            return new Date(dataVenda).toDateString() === data.toDateString();
+          })
           .reduce((acc, v) => acc + (parseFloat(v.valor_total) || 0), 0);
         
         const clientesDia = new Set(
@@ -152,13 +173,15 @@ export const useDashboard = () => {
             .filter(Boolean)
         ).size;
         
+        console.log(`📊 ${dia} (${data.toLocaleDateString()}): Vendas R$ ${vendasDia.toFixed(2)}, Clientes ${clientesDia}`);
+        
         return { dia, vendas: vendasDia, clientes: clientesDia };
       });
       
       setVendasSemana(vendasPorDia);
       setClientesPorDia(vendasPorDia);
 
-      // Serviços mais vendidos (baseado nos agendamentos da semana)
+      // ========== SERVIÇOS MAIS VENDIDOS ==========
       const servicosCount = {};
       agendamentosSemana.forEach(ag => {
         if (ag?.servico_nome) {
@@ -173,7 +196,7 @@ export const useDashboard = () => {
           .slice(0, 5)
       );
 
-      // Horários de pico
+      // ========== HORÁRIOS DE PICO ==========
       const horariosCount = {};
       agendamentosHoje.forEach(ag => {
         if (ag?.data_hora) {
@@ -189,16 +212,16 @@ export const useDashboard = () => {
           .sort((a, b) => a.hora.localeCompare(b.hora))
       );
 
-      // Estoque crítico
+      // ========== ESTOQUE CRÍTICO ==========
       setEstoqueCritico(
         estoque.slice(0, 5).map(p => ({
-          nome: p.nome || 'Produto',
+          nome: p.nome || p.produto_nome || 'Produto',
           quantidade: p.quantidade || 0,
-          minimo: p.quantidade_minima || 0
+          minimo: p.quantidade_minima || p.minimo || 0
         }))
       );
 
-      // Agendamentos recentes
+      // ========== AGENDAMENTOS RECENTES ==========
       setAgendamentosRecentes(
         agendamentosHoje
           .filter(ag => ag)
@@ -217,7 +240,7 @@ export const useDashboard = () => {
           }))
       );
 
-      // Alertas
+      // ========== ALERTAS ==========
       const alertasList = [];
       
       if (estoque.length > 0) {
@@ -248,6 +271,8 @@ export const useDashboard = () => {
       }
       
       setAlertas(alertasList);
+      
+      console.log('✅ Dashboard carregado com sucesso!');
       
     } catch (error) {
       console.error('❌ Erro no dashboard:', error);
