@@ -373,7 +373,7 @@ const ModalAgendamento = ({
             </div>
           )}
 
-          {/* Data e Hora */}
+          {/* Data e Hora - CORRIGIDO */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -384,7 +384,13 @@ const ModalAgendamento = ({
                 className="input-field"
                 value={formData.data}
                 onChange={(e) => setFormData({...formData, data: e.target.value})}
+                disabled={!!agendamentoSelecionado}
               />
+              {agendamentoSelecionado && (
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ A data não pode ser alterada após o agendamento ser criado
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -392,11 +398,12 @@ const ModalAgendamento = ({
               </label>
               <select
                 className="input-field"
-                value={formData.hora}
+                value={formData.hora || ''}
                 onChange={(e) => setFormData({...formData, hora: e.target.value})}
                 required
+                disabled={!formData.profissionalId || !formData.data}
               >
-                <option value="">Selecione um horário</option>
+                <option value="" disabled>Selecione um horário</option>
                 {horariosDoDia.map(horario => (
                   <option key={horario} value={horario}>
                     {horario}
@@ -405,6 +412,11 @@ const ModalAgendamento = ({
               </select>
               {loading && (
                 <p className="text-xs text-gray-500 mt-1">Carregando horários...</p>
+              )}
+              {formData.profissionalId && formData.data && horariosDoDia.length === 0 && !loading && (
+                <p className="text-xs text-red-500 mt-1">
+                  ⚠️ Não há horários disponíveis para este profissional nesta data
+                </p>
               )}
               {config && config.intervaloMinutos && (
                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
