@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Clock, Plus, ChevronLeft, ChevronRight, User } from 'lucide-react';
-import { format } from 'date-fns';
+import { isSameDay } from 'date-fns';
 import { getStatusColor } from './helpers';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,38 +26,27 @@ const TimelineAgendamentos = ({
   
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
-  // Função para extrair data ignorando fuso horário
-  const extrairDataLocal = (dataHoraStr) => {
-    if (!dataHoraStr) return null;
-    const match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) return match[1];
-    return null;
-  };
+  // LOG PARA DEBUG
+  useEffect(() => {
+    console.log('📊 Timeline - Profissionais recebidos:', profissionais?.map(p => p.nome));
+    console.log('👤 Timeline - Usuário:', { 
+      isFuncionario, 
+      funcionarioId: usuario?.funcionarioId,
+      nome: usuario?.nome 
+    });
+  }, [profissionais, isFuncionario, usuario]);
 
-  // Função para extrair hora ignorando fuso horário
-  const extrairHoraLocal = (dataHoraStr) => {
-    if (!dataHoraStr) return null;
-    
-    let match = dataHoraStr.match(/T(\d{2}):(\d{2}):/);
-    if (match) return `${match[1]}:${match[2]}`;
-    
-    match = dataHoraStr.match(/\s(\d{2}):(\d{2}):/);
-    if (match) return `${match[1]}:${match[2]}`;
-    
-    match = dataHoraStr.match(/^(\d{2}):(\d{2})$/);
-    if (match) return `${match[1]}:${match[2]}`;
-    
-    return null;
-  };
-
-  // FILTRO DE PROFISSIONAIS
+  // FILTRO DE PROFISSIONAIS - FORÇADO para funcionário
   const profissionaisFiltrados = React.useMemo(() => {
     if (!profissionais) return [];
     
     if (isFuncionario && usuario?.funcionarioId) {
+      // Filtra para garantir que só tem o funcionário logado
       const apenasEu = profissionais.filter(prof => prof.id === usuario.funcionarioId);
+      console.log('🔒 Timeline - Profissionais filtrados (só eu):', apenasEu.map(p => p.nome));
       return apenasEu;
     }
+    console.log('🔓 Timeline - Todos profissionais:', profissionais.map(p => p.nome));
     return profissionais;
   }, [profissionais, isFuncionario, usuario]);
 
@@ -73,16 +62,15 @@ const TimelineAgendamentos = ({
   const agendamentosFiltrados = React.useMemo(() => {
     if (!agendamentos) return [];
     
-    const dataSelecionadaStr = format(dataSelecionada, 'yyyy-MM-dd');
-    
-    const filtrados = agendamentos.filter(ag => {
-      const dataAgendamento = extrairDataLocal(ag.data_hora);
-      if (dataAgendamento !== dataSelecionadaStr) return false;
+    return agendamentos.filter(ag => {
+      if (!isSameDay(new Date(ag.data_hora), dataSelecionada)) return false;
       
+      // Se for funcionário, mostra SÓ os dele
       if (isFuncionario && usuario?.funcionarioId) {
         return ag.funcionario_id === usuario.funcionarioId;
       }
       
+      // Para admin/gerente, aplica os filtros normais
       if (filtroProfissional && filtroProfissional !== 'todos') {
         if (ag.funcionario_id !== parseInt(filtroProfissional)) return false;
       }
@@ -91,22 +79,19 @@ const TimelineAgendamentos = ({
       }
       return true;
     });
-    
-    return filtrados;
   }, [agendamentos, dataSelecionada, isFuncionario, usuario, filtroProfissional, filtroServico]);
 
-  // Usar horários das configurações ou fallback (CORRIGIDO - inclui horários a partir das 07:00)
+  // Usar horários das configurações ou fallback
   const horarios = React.useMemo(() => {
     if (loading || !horariosDisponiveis?.length) {
-      // Horários das 07:00 às 19:00
-      return ['07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', 
-              '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', 
-              '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'];
+      return ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', 
+              '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', 
+              '17:00', '17:30', '18:00', '18:30', '19:00'];
     }
     return horariosDisponiveis;
   }, [horariosDisponiveis, loading]);
 
-  // Funções para controlar o scroll
+  // Funções para controlar o scroll e as setas
   const checkScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -115,6 +100,7 @@ const TimelineAgendamentos = ({
     }
   };
 
+  // Eventos de mouse para arrastar
   const handleMouseDown = (e) => {
     setIsDragging(true);
     setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
@@ -173,6 +159,7 @@ const TimelineAgendamentos = ({
   const larguraMinimaColuna = 280;
   const larguraTotal = profissionaisFiltrados.length * larguraMinimaColuna + 100;
 
+  // Se não houver profissionais filtrados
   if (!profissionaisFiltrados || profissionaisFiltrados.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-lg p-8 text-center">
@@ -188,6 +175,7 @@ const TimelineAgendamentos = ({
 
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden relative">
+      {/* Setas de navegação - SÓ MOSTRA SE TIVER MAIS DE 1 PROFISSIONAL */}
       {profissionaisFiltrados.length > 1 && showLeftArrow && (
         <button
           onClick={scrollLeftHandler}
@@ -208,6 +196,7 @@ const TimelineAgendamentos = ({
         </button>
       )}
 
+      {/* Container com scroll horizontal e arrasto por mouse */}
       <div 
         ref={scrollContainerRef}
         className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 cursor-grab active:cursor-grabbing"
@@ -222,6 +211,7 @@ const TimelineAgendamentos = ({
         }}
       >
         <div style={{ minWidth: `${larguraTotal}px` }}>
+          {/* Cabeçalho dos profissionais */}
           <div 
             className="grid bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 sticky top-0"
             style={{ 
@@ -251,6 +241,7 @@ const TimelineAgendamentos = ({
             ))}
           </div>
 
+          {/* Linhas de horário */}
           <div className="divide-y divide-gray-100">
             {horarios.map((hora, index) => (
               <div 
@@ -267,7 +258,9 @@ const TimelineAgendamentos = ({
                 {profissionaisFiltrados.map((prof) => {
                   const agendamento = agendamentosFiltrados.find(ag => {
                     if (!ag?.data_hora) return false;
-                    const horaAgendamento = extrairHoraLocal(ag.data_hora);
+                    const dataAg = new Date(ag.data_hora);
+                    const horaAgendamento = dataAg.getHours().toString().padStart(2, '0') + ':' + 
+                                           dataAg.getMinutes().toString().padStart(2, '0');
                     return ag.funcionario_id === prof.id && horaAgendamento === hora;
                   });
 
@@ -327,12 +320,14 @@ const TimelineAgendamentos = ({
         </div>
       </div>
 
+      {/* Indicador de arraste - SÓ MOSTRA SE TIVER MAIS DE 1 PROFISSIONAL */}
       {profissionaisFiltrados.length > 1 && (
         <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 bg-gray-50/50">
-          ← Arraste para o lado para ver mais profissionais →
+          ← Arraste para o lado para ver mais profissionais (clique nos agendamentos para editar) →
         </div>
       )}
 
+      {/* Mensagem para funcionário quando está sozinho */}
       {isFuncionario && profissionaisFiltrados.length === 1 && (
         <div className="text-xs text-blue-600 text-center py-2 border-t border-gray-100 bg-blue-50">
           ✓ Mostrando apenas seus agendamentos
