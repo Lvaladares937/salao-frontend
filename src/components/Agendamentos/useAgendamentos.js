@@ -34,6 +34,73 @@ const calcularComissaoServico = (servico, profissional) => {
   return profissional.comissao_percentual || 30;
 };
 
+// 🔥 FUNÇÃO PARA CONVERTER DATA/HORA LOCAL PARA ISO (CORRIGIDA)
+const localToISO = (data, hora) => {
+  if (!data || !hora) return null;
+  
+  const [ano, mes, dia] = data.split('-');
+  const [horaStr, minutoStr] = hora.split(':');
+  
+  // Criar data em UTC sem conversão de timezone
+  return new Date(Date.UTC(
+    parseInt(ano),
+    parseInt(mes) - 1,
+    parseInt(dia),
+    parseInt(horaStr),
+    parseInt(minutoStr),
+    0
+  )).toISOString();
+};
+
+// 🔥 FUNÇÃO PARA EXTRAIR DATA CORRETAMENTE (SEM CONVERSÃO DE TIMEZONE)
+const extrairDataCorreta = (dataHoraStr) => {
+  if (!dataHoraStr) return format(new Date(), 'yyyy-MM-dd');
+  
+  // Se for string ISO "2026-03-27T14:00:00.000Z"
+  let match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    return match[1];
+  }
+  
+  // Se for formato "2026-03-27 14:00:00"
+  match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    return match[1];
+  }
+  
+  return format(new Date(), 'yyyy-MM-dd');
+};
+
+// 🔥 FUNÇÃO PARA EXTRAIR HORA - CONVERTER UTC PARA LOCAL
+const extrairHoraCorreta = (dataHoraStr) => {
+  if (!dataHoraStr) return '09:00';
+  
+  // Formato ISO "2026-03-27T13:30:00.000Z"
+  let match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
+  if (match) {
+    let horaUTC = parseInt(match[1]);
+    let minuto = parseInt(match[2]);
+    
+    // Converter UTC para horário de Brasília (UTC-3)
+    let horaLocal = horaUTC - 3;
+    if (horaLocal < 0) {
+      horaLocal = horaLocal + 24;
+    }
+    
+    console.log('🔄 Conversão UTC -> Local:', `${horaUTC}:${minuto} -> ${horaLocal}:${minuto}`);
+    
+    return `${horaLocal.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}`;
+  }
+  
+  // Formato com espaço "2026-03-20 16:00:00"
+  match = dataHoraStr.match(/\s(\d{2}):(\d{2})/);
+  if (match) {
+    return `${match[1]}:${match[2]}`;
+  }
+  
+  return '09:00';
+};
+
 export const useAgendamentos = () => {
   const { podeVer, podeEditar, podeExcluir, nivel, usuario } = usePermissao();
   const isFuncionario = nivel === 'funcionario';
@@ -50,6 +117,7 @@ export const useAgendamentos = () => {
   const [clientes, setClientes] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [horarioInicial, setHorarioInicial] = useState(null);
   
   const [formData, setFormData] = useState({
     clienteId: '',
@@ -60,6 +128,29 @@ export const useAgendamentos = () => {
     status: 'agendado',
     observacoes: ''
   });
+
+  // 🔥 FUNÇÃO PARA RESETAR FORMULÁRIO
+  const resetarFormData = useCallback(() => {
+    console.log('🔄 Resetando formulário');
+    setFormData({
+      clienteId: '',
+      profissionalId: '',
+      servicoId: '',
+      data: format(dataSelecionada, 'yyyy-MM-dd'),
+      hora: '09:00',
+      status: 'agendado',
+      observacoes: ''
+    });
+    setAgendamentoSelecionado(null);
+    setHorarioInicial(null);
+  }, [dataSelecionada]);
+
+  // 🔥 RESETAR QUANDO O MODAL FECHAR
+  useEffect(() => {
+    if (!showModal) {
+      resetarFormData();
+    }
+  }, [showModal, resetarFormData]);
 
   // Log para debug
   useEffect(() => {
@@ -144,8 +235,16 @@ export const useAgendamentos = () => {
         console.log(`✅ Total de agendamentos: ${data.length}`);
       }
       
-      setAgendamentos(data);
-      setAgendamentosFiltrados(data);
+      // 🔥 CORREÇÃO: Normalizar os agendamentos ao carregar
+      const agendamentosNormalizados = data.map(ag => ({
+        ...ag,
+        data_hora_normalizada: ag.data_hora,
+        hora_extraida: extrairHoraCorreta(ag.data_hora),
+        data_extraida: extrairDataCorreta(ag.data_hora)
+      }));
+      
+      setAgendamentos(agendamentosNormalizados);
+      setAgendamentosFiltrados(agendamentosNormalizados);
     } catch (error) {
       console.error('❌ Erro ao carregar agendamentos:', error);
     } finally {
@@ -167,7 +266,7 @@ export const useAgendamentos = () => {
     };
     
     carregarDadosIniciais();
-  }, []);
+  }, [carregarAgendamentos]);
 
   // FILTRO POR PROFISSIONAL E SERVIÇO
   useEffect(() => {
@@ -195,206 +294,183 @@ export const useAgendamentos = () => {
     setAgendamentosFiltrados(filtrados);
   }, [agendamentos, filtroProfissional, filtroServico, isFuncionario]);
 
-  // Função para abrir novo agendamento
-  const abrirNovoAgendamento = (profissionalId = null, horario = null) => {
-    console.log('➕ Abrindo novo agendamento', { profissionalId, horario });
+  // 🔥 FUNÇÃO PARA ABRIR NOVO AGENDAMENTO (com profissional e horário)
+  const abrirNovoAgendamento = (profissionalId = null, horario = null, data = null) => {
+    console.log('➕ Abrindo novo agendamento', { profissionalId, horario, data });
     
     if (!podeEditar('agendamentos')) {
       alert('Você não tem permissão para criar agendamentos');
       return;
     }
 
+    const dataParaUsar = data || format(dataSelecionada, 'yyyy-MM-dd');
+    const profissionalParaUsar = profissionalId || (isFuncionario ? usuario?.funcionarioId : '');
+    const horarioParaUsar = horario || '09:00';
+    
+    // 🔥 Armazenar o horário inicial para o modal
+    setHorarioInicial(horarioParaUsar);
+    
     setAgendamentoSelecionado(null);
     setFormData({
       clienteId: '',
-      profissionalId: profissionalId || (isFuncionario ? usuario?.funcionarioId : ''),
+      profissionalId: profissionalParaUsar,
       servicoId: '',
-      data: format(dataSelecionada, 'yyyy-MM-dd'),
-      hora: horario || '09:00',
+      data: dataParaUsar,
+      hora: horarioParaUsar,
       status: 'agendado',
       observacoes: ''
     });
     setShowModal(true);
   };
 
-  // Abrir editar agendamento
+  // 🔥 FUNÇÃO PARA ABRIR EDIÇÃO DE AGENDAMENTO (CORRIGIDA)
   const abrirEditarAgendamento = (agendamento) => {
-  console.log('🔍 VERIFICAÇÃO DE EDIÇÃO:');
-  console.log('   Agendamento ID:', agendamento.id);
-  console.log('   Data/Hora original (banco):', agendamento.data_hora);
-  
-  // Função para extrair hora corretamente (direto da string, sem conversão de fuso)
-  const extrairHoraCorreta = (dataHoraStr) => {
-    if (!dataHoraStr) return '09:00';
+    console.log('🔍 VERIFICAÇÃO DE EDIÇÃO:');
+    console.log('   Agendamento ID:', agendamento.id);
+    console.log('   Data/Hora original (banco):', agendamento.data_hora);
     
-    // Tenta extrair no formato ISO "2026-03-20T16:00:00.000Z"
-    let match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
-    if (match) {
-      return `${match[1]}:${match[2]}`;
-    }
+    // 🔥 CORREÇÃO: Extrair data e hora sem conversão de timezone
+    const horaCorreta = extrairHoraCorreta(agendamento.data_hora);
+    const dataCorreta = extrairDataCorreta(agendamento.data_hora);
     
-    // Tenta extrair no formato com espaço "2026-03-20 16:00:00"
-    match = dataHoraStr.match(/\s(\d{2}):(\d{2})/);
-    if (match) {
-      return `${match[1]}:${match[2]}`;
-    }
-    
-    // Fallback
-    console.warn('Não foi possível extrair hora de:', dataHoraStr);
-    return '09:00';
-  };
-  
-  // Função para extrair data corretamente
-  const extrairDataCorreta = (dataHoraStr) => {
-    if (!dataHoraStr) return format(new Date(), 'yyyy-MM-dd');
-    
-    let match = dataHoraStr.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) {
-      return match[1];
-    }
-    
-    return format(new Date(), 'yyyy-MM-dd');
-  };
-  
-  const horaCorreta = extrairHoraCorreta(agendamento.data_hora);
-  const dataCorreta = extrairDataCorreta(agendamento.data_hora);
-  
-  console.log('   Hora extraída:', horaCorreta);
-  console.log('   Data extraída:', dataCorreta);
+    console.log('   Hora extraída (UTC original):', horaCorreta);
+    console.log('   Data extraída:', dataCorreta);
 
-  if (!podeEditar('agendamentos')) {
-    alert('Você não tem permissão para editar agendamentos');
-    return;
-  }
-
-  if (isFuncionario) {
-    if (agendamento.funcionario_id !== usuario?.funcionarioId) {
-      alert('Você só pode editar seus próprios agendamentos!');
+    if (!podeEditar('agendamentos')) {
+      alert('Você não tem permissão para editar agendamentos');
       return;
     }
-  }
 
-  setAgendamentoSelecionado(agendamento);
-  setFormData({
-    clienteId: agendamento.cliente_id,
-    profissionalId: agendamento.funcionario_id,
-    servicoId: agendamento.servico_id,
-    data: dataCorreta,
-    hora: horaCorreta,
-    status: agendamento.status,
-    observacoes: agendamento.observacoes || ''
-  });
-  setShowModal(true);
-};
-
-  // Função para salvar agendamento
-  const salvarAgendamento = async (dadosPagamento) => {
-  console.log('📝 Salvando agendamento:', formData);
-  console.log('📝 Status atual:', formData.status);
-  
-  if (!formData.clienteId || !formData.profissionalId || !formData.servicoId) {
-    alert('Preencha todos os campos obrigatórios');
-    return;
-  }
-
-  const cliente = clientes.find(c => c.id === parseInt(formData.clienteId));
-  const profissional = funcionarios.find(f => f.id === parseInt(formData.profissionalId));
-  const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
-
-  if (!cliente) {
-    alert(`Cliente ID ${formData.clienteId} não encontrado`);
-    return;
-  }
-  
-  if (!profissional) {
-    alert(`Profissional ID ${formData.profissionalId} não encontrado`);
-    return;
-  }
-  
-  if (!servico) {
-    alert(`Serviço ID ${formData.servicoId} não encontrado`);
-    return;
-  }
-
-  if (isFuncionario && agendamentoSelecionado) {
-    if (agendamentoSelecionado.funcionario_id !== usuario?.funcionarioId) {
-      alert('Você só pode editar seus próprios agendamentos!');
-      return;
+    if (isFuncionario) {
+      if (agendamento.funcionario_id !== usuario?.funcionarioId) {
+        alert('Você só pode editar seus próprios agendamentos!');
+        return;
+      }
     }
-  }
 
-  const percentualComissao = calcularComissaoServico(servico, profissional);
-  const valorComissao = servico.preco * (percentualComissao / 100);
-  
-  const dataHora = `${formData.data}T${formData.hora}:00`;
-
-  const agendamentoData = {
-    cliente_id: parseInt(formData.clienteId),
-    funcionario_id: parseInt(formData.profissionalId),
-    servico_id: parseInt(formData.servicoId),
-    data_hora: dataHora,
-    status: formData.status,
-    observacoes: formData.observacoes || '',
-    valor: servico.preco,
-    valor_comissao: valorComissao,
-    percentual_comissao: percentualComissao,
-    ...(dadosPagamento && {
-      forma_pagamento: dadosPagamento.forma_pagamento,
-      bandeira_cartao: dadosPagamento.bandeira_cartao,
-      parcelas: dadosPagamento.parcelas,
-      data_pagamento: dadosPagamento.data_pagamento
-    })
+    setAgendamentoSelecionado(agendamento);
+    setHorarioInicial(horaCorreta);
+    setFormData({
+      clienteId: agendamento.cliente_id,
+      profissionalId: agendamento.funcionario_id,
+      servicoId: agendamento.servico_id,
+      data: dataCorreta,
+      hora: horaCorreta,
+      status: agendamento.status,
+      observacoes: agendamento.observacoes || ''
+    });
+    setShowModal(true);
   };
 
-  console.log('📤 Enviando para API:', agendamentoData);
+  // 🔥 FUNÇÃO PARA SALVAR AGENDAMENTO - ENVIAR HORÁRIO LOCAL
+  const salvarAgendamento = async (dadosPagamento = null) => {
+    console.log('📝 Salvando agendamento:', formData);
+    console.log('📝 Status atual:', formData.status);
+    console.log('💳 Dados de pagamento:', dadosPagamento);
+    
+    if (!formData.clienteId || !formData.profissionalId || !formData.servicoId) {
+      alert('Preencha todos os campos obrigatórios');
+      return;
+    }
 
-  try {
-    let resultado;
-    if (agendamentoSelecionado) {
-      console.log(`✏️ Atualizando agendamento ID: ${agendamentoSelecionado.id}`);
-      resultado = await agendamentosService.atualizar(agendamentoSelecionado.id, agendamentoData);
-      console.log('✅ Atualizado com sucesso:', resultado);
-      
-      const evento = new CustomEvent('agendamentoAtualizado', { 
-        detail: { tipo: 'edicao', agendamento: agendamentoData }
-      });
-      window.dispatchEvent(evento);
-      
-      alert('Agendamento atualizado com sucesso!');
-    } else {
-      console.log('➕ Criando novo agendamento');
-      resultado = await agendamentosService.criar(agendamentoData);
-      console.log('✅ Criado com sucesso:', resultado);
-      
-      const evento = new CustomEvent('novoAgendamento', { 
-        detail: { 
-          venda: {
-            funcionarioId: profissional.id,
-            funcionario: profissional.nome,
-            data: formData.data,
-            valor: servico.preco,
-            servico: servico.nome,
-            comissao: valorComissao
+    const cliente = clientes.find(c => c.id === parseInt(formData.clienteId));
+    const profissional = funcionarios.find(f => f.id === parseInt(formData.profissionalId));
+    const servico = servicos.find(s => s.id === parseInt(formData.servicoId));
+
+    if (!cliente) {
+      alert(`Cliente ID ${formData.clienteId} não encontrado`);
+      return;
+    }
+    
+    if (!profissional) {
+      alert(`Profissional ID ${formData.profissionalId} não encontrado`);
+      return;
+    }
+    
+    if (!servico) {
+      alert(`Serviço ID ${formData.servicoId} não encontrado`);
+      return;
+    }
+
+    if (isFuncionario && agendamentoSelecionado) {
+      if (agendamentoSelecionado.funcionario_id !== usuario?.funcionarioId) {
+        alert('Você só pode editar seus próprios agendamentos!');
+        return;
+      }
+    }
+
+    const percentualComissao = calcularComissaoServico(servico, profissional);
+    const valorComissao = servico.preco * (percentualComissao / 100);
+    
+    // 🔥 CORREÇÃO: Enviar o horário LOCAL sem conversão
+    const dataHoraLocal = `${formData.data}T${formData.hora}:00`;
+    
+    console.log('🔍 Horário local clicado:', `${formData.data} ${formData.hora}`);
+    console.log('🔍 Horário enviado para API:', dataHoraLocal);
+
+    const agendamentoData = {
+      cliente_id: parseInt(formData.clienteId),
+      funcionario_id: parseInt(formData.profissionalId),
+      servico_id: parseInt(formData.servicoId),
+      data_hora: dataHoraLocal, // Envia como "2026-03-27T10:00:00"
+      status: formData.status,
+      observacoes: formData.observacoes || '',
+      valor: servico.preco,
+      valor_comissao: valorComissao,
+      percentual_comissao: percentualComissao,
+      ...(dadosPagamento && {
+        forma_pagamento: dadosPagamento.forma_pagamento,
+        bandeira_cartao: dadosPagamento.bandeira_cartao,
+        parcelas: dadosPagamento.parcelas,
+        data_pagamento: dadosPagamento.data_pagamento
+      })
+    };
+
+    console.log('📤 Enviando para API:', agendamentoData);
+
+    try {
+      if (agendamentoSelecionado) {
+        console.log(`✏️ Atualizando agendamento ID: ${agendamentoSelecionado.id}`);
+        await agendamentosService.atualizar(agendamentoSelecionado.id, agendamentoData);
+        console.log('✅ Atualizado com sucesso');
+        
+        const evento = new CustomEvent('agendamentoAtualizado', { 
+          detail: { tipo: 'edicao', agendamento: agendamentoData }
+        });
+        window.dispatchEvent(evento);
+        
+        alert('Agendamento atualizado com sucesso!');
+      } else {
+        console.log('➕ Criando novo agendamento');
+        const response = await agendamentosService.criar(agendamentoData);
+        console.log('✅ Criado com sucesso', response);
+        
+        const evento = new CustomEvent('novoAgendamento', { 
+          detail: { 
+            venda: {
+              funcionarioId: profissional.id,
+              funcionario: profissional.nome,
+              data: formData.data,
+              valor: servico.preco,
+              servico: servico.nome,
+              comissao: valorComissao
+            }
           }
-        }
-      });
-      window.dispatchEvent(evento);
+        });
+        window.dispatchEvent(evento);
+        
+        alert('Agendamento criado com sucesso!');
+      }
       
-      alert('Agendamento criado com sucesso!');
+      await carregarAgendamentos();
+      setShowModal(false);
+      setHorarioInicial(null);
+    } catch (error) {
+      console.error('❌ Erro ao salvar agendamento:', error);
+      const errorMsg = error.response?.data?.error || error.message;
+      alert('Erro ao salvar agendamento: ' + errorMsg);
     }
-    
-    // Recarregar os agendamentos
-    console.log('🔄 Recarregando agendamentos...');
-    await carregarAgendamentos();
-    console.log('✅ Agendamentos recarregados');
-    
-    setShowModal(false);
-  } catch (error) {
-    console.error('❌ Erro ao salvar agendamento:', error);
-    const errorMsg = error.response?.data?.error || error.message;
-    alert('Erro ao salvar agendamento: ' + errorMsg);
-  }
-};
+  };
 
   // Função para excluir agendamento
   const excluirAgendamento = async (id) => {
@@ -445,7 +521,7 @@ export const useAgendamentos = () => {
   const buscarAgendamentosPorPeriodo = (mes, ano) => {
     return agendamentosFiltrados.filter(ag => {
       const dataAg = new Date(ag.data_hora);
-      return dataAg.getMonth() === mes && dataAg.getFullYear() === ano;
+      return dataAg.getUTCMonth() === mes && dataAg.getUTCFullYear() === ano;
     });
   };
 
@@ -498,6 +574,8 @@ export const useAgendamentos = () => {
     },
     nivel,
     usuario,
-    isFuncionario
+    isFuncionario,
+    horarioInicial,
+    setHorarioInicial
   };
 };
