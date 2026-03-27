@@ -79,19 +79,15 @@ const agendamentosService = {
   },
 
   // Verificar disponibilidade de horário
-  verificarDisponibilidade: async (funcionarioId, data, hora, agendamentoIdIgnorar = null) => {
-  try {
-    let url = `/agendamentos/disponibilidade?funcionario_id=${funcionarioId}&data=${data}&hora=${hora}`;
-    if (agendamentoIdIgnorar) {
-      url += `&ignorar_id=${agendamentoIdIgnorar}`;
+  verificarDisponibilidade: async (funcionarioId, data, hora) => {
+    try {
+      const response = await api.get(`/agendamentos/disponibilidade?funcionario_id=${funcionarioId}&data=${data}&hora=${hora}`);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao verificar disponibilidade:', error);
+      throw error;
     }
-    const response = await api.get(url);
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao verificar disponibilidade:', error);
-    throw error;
-  }
-},
+  },
 
   buscarPorFuncionarioPeriodo: async (funcionarioId, mes, ano) => {
     try {
