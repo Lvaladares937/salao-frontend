@@ -24,39 +24,12 @@ export const useDashboard = () => {
   const [agendamentosRecentes, setAgendamentosRecentes] = useState([]);
   const [alertas, setAlertas] = useState([]);
 
-  // Função auxiliar para extrair data da venda (IGNORA FUSO HORÁRIO)
-  const extrairDataVenda = (venda) => {
-    if (!venda) return null;
-    const dataStr = venda.data_venda || venda.data_pagamento || venda.created_at || venda.data;
-    if (!dataStr) return null;
-    
-    // Extrair apenas a data no formato YYYY-MM-DD
-    const match = dataStr.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) {
-      return match[1];
-    }
-    return null;
-  };
-
-  // Função auxiliar para extrair data do agendamento (IGNORA FUSO HORÁRIO)
-  const extrairDataAgendamento = (agendamento) => {
-    if (!agendamento || !agendamento.data_hora) return null;
-    const dataStr = agendamento.data_hora;
-    const match = dataStr.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) {
-      return match[1];
-    }
-    return null;
-  };
-
   const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
       console.log('🔍 Iniciando carregamento do dashboard...');
       
       const hoje = new Date();
-      const hojeStr = hoje.toISOString().split('T')[0];
-      
       const dataInicio = new Date(hoje);
       dataInicio.setHours(0, 0, 0, 0);
       const dataFim = new Date(hoje);
@@ -75,9 +48,6 @@ export const useDashboard = () => {
       fimSemana.setHours(23, 59, 59, 999);
       
       console.log('📅 Períodos calculados');
-      console.log(`   Data hoje: ${hojeStr}`);
-      console.log(`   Início semana: ${inicioSemana.toISOString().split('T')[0]}`);
-      console.log(`   Fim semana: ${fimSemana.toISOString().split('T')[0]}`);
 
       // ========== 1. BUSCAR AGENDAMENTOS DO DIA ==========
       let agendamentosHoje = [];
@@ -103,7 +73,7 @@ export const useDashboard = () => {
         console.error('❌ Erro ao buscar agendamentos semana:', error);
       }
 
-      // ========== 3. BUSCAR VENDAS DO FINANCEIRO ==========
+      // ========== 3. BUSCAR VENDAS DO FINANCEIRO (JÁ INCLUI TUDO) ==========
       let vendas = [];
       try {
         vendas = await financeiroService.listarVendas(
@@ -113,13 +83,7 @@ export const useDashboard = () => {
         console.log(`💰 Vendas do financeiro: ${vendas.length}`);
         
         if (vendas.length > 0) {
-          console.log('💰 Estrutura da primeira venda:', {
-            id: vendas[0].id,
-            valor_total: vendas[0].valor_total,
-            data_venda: vendas[0]?.data_venda,
-            data_pagamento: vendas[0]?.data_pagamento,
-            created_at: vendas[0]?.created_at
-          });
+          console.log('💰 Primeira venda:', vendas[0]);
         }
       } catch (error) {
         console.error('❌ Erro ao buscar vendas:', error);
@@ -146,14 +110,13 @@ export const useDashboard = () => {
       console.log(`   Vendas: ${vendas.length}`);
       console.log(`   Estoque baixo: ${estoque.length}`);
 
-      // ========== CALCULAR VENDAS DE HOJE ==========
+      // Calcular vendas de HOJE
       const vendasHoje = vendas.filter(v => {
-        const dataVenda = extrairDataVenda(v);
-        return dataVenda === hojeStr;
+        const dataVenda = v.data_venda;
+        return dataVenda && new Date(dataVenda).toDateString() === hoje.toDateString();
       });
       
       const totalVendasHoje = vendasHoje.reduce((acc, v) => acc + (parseFloat(v.valor_total) || 0), 0);
-      console.log(`💰 Vendas hoje (${hojeStr}): R$ ${totalVendasHoje.toFixed(2)}`);
       
       // Calcular clientes únicos hoje
       const clientesHoje = new Set(
@@ -172,28 +135,22 @@ export const useDashboard = () => {
         ticketMedio
       });
 
-      // ========== CALCULAR VENDAS POR DIA DA SEMANA ==========
+      // Calcular vendas por dia da semana
       const diasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
       const vendasPorDia = diasSemana.map((dia, index) => {
         const data = new Date(inicioSemana);
         data.setDate(inicioSemana.getDate() + index);
-        const dataStr = data.toISOString().split('T')[0];
         
         const vendasDia = vendas
-          .filter(v => {
-            const dataVenda = extrairDataVenda(v);
-            return dataVenda === dataStr;
-          })
+          .filter(v => v && v.data_venda && new Date(v.data_venda).toDateString() === data.toDateString())
           .reduce((acc, v) => acc + (parseFloat(v.valor_total) || 0), 0);
         
         const clientesDia = new Set(
           agendamentosSemana
-            .filter(a => extrairDataAgendamento(a) === dataStr)
+            .filter(a => a && a.data_hora && new Date(a.data_hora).toDateString() === data.toDateString())
             .map(a => a.cliente_id)
             .filter(Boolean)
         ).size;
-        
-        console.log(`📊 ${dia} (${dataStr}): Vendas R$ ${vendasDia.toFixed(2)}, Clientes ${clientesDia}`);
         
         return { dia, vendas: vendasDia, clientes: clientesDia };
       });
@@ -201,7 +158,7 @@ export const useDashboard = () => {
       setVendasSemana(vendasPorDia);
       setClientesPorDia(vendasPorDia);
 
-      // ========== SERVIÇOS MAIS VENDIDOS ==========
+      // Serviços mais vendidos (baseado nos agendamentos da semana)
       const servicosCount = {};
       agendamentosSemana.forEach(ag => {
         if (ag?.servico_nome) {
@@ -216,7 +173,7 @@ export const useDashboard = () => {
           .slice(0, 5)
       );
 
-      // ========== HORÁRIOS DE PICO ==========
+      // Horários de pico
       const horariosCount = {};
       agendamentosHoje.forEach(ag => {
         if (ag?.data_hora) {
@@ -232,16 +189,16 @@ export const useDashboard = () => {
           .sort((a, b) => a.hora.localeCompare(b.hora))
       );
 
-      // ========== ESTOQUE CRÍTICO ==========
+      // Estoque crítico
       setEstoqueCritico(
         estoque.slice(0, 5).map(p => ({
-          nome: p.nome || p.produto_nome || 'Produto',
+          nome: p.nome || 'Produto',
           quantidade: p.quantidade || 0,
-          minimo: p.quantidade_minima || p.minimo || 0
+          minimo: p.quantidade_minima || 0
         }))
       );
 
-      // ========== AGENDAMENTOS RECENTES ==========
+      // Agendamentos recentes
       setAgendamentosRecentes(
         agendamentosHoje
           .filter(ag => ag)
@@ -260,7 +217,7 @@ export const useDashboard = () => {
           }))
       );
 
-      // ========== ALERTAS ==========
+      // Alertas
       const alertasList = [];
       
       if (estoque.length > 0) {
@@ -291,8 +248,6 @@ export const useDashboard = () => {
       }
       
       setAlertas(alertasList);
-      
-      console.log('✅ Dashboard carregado com sucesso!');
       
     } catch (error) {
       console.error('❌ Erro no dashboard:', error);
