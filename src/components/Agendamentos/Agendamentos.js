@@ -19,11 +19,11 @@ const Agendamentos = () => {
     setFiltroProfissional,
     filtroServico,
     setFiltroServico,
-    agendamentos, // 👈 JÁ VEM FILTRADO DO HOOK!
+    agendamentos,
     formData,
     setFormData,
     loading,
-    profissionais, // 👈 JÁ VEM FILTRADO DO HOOK!
+    profissionais,
     funcionarios,
     clientes,
     servicos,
@@ -31,22 +31,21 @@ const Agendamentos = () => {
     abrirEditarAgendamento,
     salvarAgendamento,
     excluirAgendamento,
-    isFuncionario // 👈 PEGA DO HOOK
+    isFuncionario,
+    horarioInicial,        // 🔥 JÁ TEM
+    setHorarioInicial      // 🔥 JÁ TEM
   } = useAgendamentos();
 
   const { usuario, temPermissao } = useAuth();
 
-  // 👇 REMOVA ESTA LINHA - NÃO FAÇA FILTRAGEM DUPLA!
-  // const agendamentosFiltrados = filtrarPorFuncionario(agendamentos, 'funcionario_id');
-
-  // 👇 LOG PARA DEBUG
   React.useEffect(() => {
     console.log('🎯 Agendamentos no componente:', {
       total: agendamentos.length,
       isFuncionario,
-      profissionais: profissionais.map(p => p.nome)
+      profissionais: profissionais.map(p => p.nome),
+      horarioInicial // 🔥 VERIFICAR SE ESTÁ CHEGANDO
     });
-  }, [agendamentos, isFuncionario, profissionais]);
+  }, [agendamentos, isFuncionario, profissionais, horarioInicial]);
 
   if (loading) {
     return (
@@ -92,9 +91,9 @@ const Agendamentos = () => {
           setFiltroProfissional={setFiltroProfissional}
           filtroServico={filtroServico}
           setFiltroServico={setFiltroServico}
-          agendamentos={agendamentos} // 👈 USA agendamentos DIRETO
+          agendamentos={agendamentos}
           dataSelecionada={dataSelecionada}
-          profissionais={profissionais} // 👈 JÁ VEM FILTRADO
+          profissionais={profissionais}
           servicos={servicos}
         />
       </div>
@@ -102,10 +101,10 @@ const Agendamentos = () => {
       {/* Timeline de Agendamentos */}
       <TimelineAgendamentos 
         dataSelecionada={dataSelecionada}
-        agendamentos={agendamentos} // 👈 USA agendamentos DIRETO
+        agendamentos={agendamentos}
         onEditar={temPermissao('agendamentos', 'editar') ? abrirEditarAgendamento : null}
         onNovo={temPermissao('agendamentos', 'editar') ? abrirNovoAgendamento : null}
-        profissionais={profissionais} // 👈 JÁ VEM FILTRADO!
+        profissionais={profissionais}
         filtroProfissional={filtroProfissional}
         filtroServico={filtroServico}
       />
@@ -113,24 +112,28 @@ const Agendamentos = () => {
       {/* Lista de Agendamentos do Dia (para mobile) */}
       <ListaMobile 
         dataSelecionada={dataSelecionada}
-        agendamentos={agendamentos} // 👈 USA agendamentos DIRETO
+        agendamentos={agendamentos}
         onEditar={temPermissao('agendamentos', 'editar') ? abrirEditarAgendamento : null}
-        profissionais={profissionais} // 👈 JÁ VEM FILTRADO
+        profissionais={profissionais}
       />
 
-      {/* Modal de Agendamento */}
+      {/* Modal de Agendamento - 🔥 ADICIONAR horarioInicial */}
       {temPermissao('agendamentos', 'editar') && (
         <ModalAgendamento
           show={showModal}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            setShowModal(false);
+            setHorarioInicial(null); // 🔥 Limpar ao fechar
+          }}
           agendamentoSelecionado={agendamentoSelecionado}
           formData={formData}
           setFormData={setFormData}
           onSalvar={salvarAgendamento}
           onExcluir={temPermissao('agendamentos', 'excluir') ? excluirAgendamento : null}
-          profissionais={profissionais} // 👈 JÁ VEM FILTRADO!
+          profissionais={profissionais}
           servicos={servicos}
           clientes={clientes}
+          horarioInicial={horarioInicial} // 🔥 PASSAR O HORÁRIO INICIAL
         />
       )}
     </div>
