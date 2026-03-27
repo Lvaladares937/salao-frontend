@@ -5,6 +5,28 @@ import { getStatusColor } from './helpers';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 import { useAuth } from '../../contexts/AuthContext';
 
+// 🔥 FUNÇÃO PARA EXTRAIR HORA - CONVERTER UTC PARA LOCAL
+const extrairHoraCorreta = (dataHoraStr) => {
+  if (!dataHoraStr) return null;
+  
+  // Formato ISO "2026-03-27T13:30:00.000Z"
+  const match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
+  if (match) {
+    let horaUTC = parseInt(match[1]);
+    let minuto = parseInt(match[2]);
+    
+    // Converter UTC para horário de Brasília (UTC-3)
+    let horaLocal = horaUTC - 3;
+    if (horaLocal < 0) {
+      horaLocal = horaLocal + 24;
+    }
+    
+    return `${horaLocal.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}`;
+  }
+  
+  return null;
+};
+
 const TimelineAgendamentos = ({ 
   dataSelecionada, 
   agendamentos, 
@@ -26,37 +48,15 @@ const TimelineAgendamentos = ({
   
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
-  // LOG PARA DEBUG
-  useEffect(() => {
-    console.log('📊 Timeline - Profissionais recebidos:', profissionais?.map(p => p.nome));
-    console.log('👤 Timeline - Usuário:', { 
-      isFuncionario, 
-      funcionarioId: usuario?.funcionarioId,
-      nome: usuario?.nome 
-    });
-  }, [profissionais, isFuncionario, usuario]);
-
-  // FILTRO DE PROFISSIONAIS - FORÇADO para funcionário
+  // FILTRO DE PROFISSIONAIS
   const profissionaisFiltrados = React.useMemo(() => {
     if (!profissionais) return [];
     
     if (isFuncionario && usuario?.funcionarioId) {
-      // Filtra para garantir que só tem o funcionário logado
-      const apenasEu = profissionais.filter(prof => prof.id === usuario.funcionarioId);
-      console.log('🔒 Timeline - Profissionais filtrados (só eu):', apenasEu.map(p => p.nome));
-      return apenasEu;
+      return profissionais.filter(prof => prof.id === usuario.funcionarioId);
     }
-    console.log('🔓 Timeline - Todos profissionais:', profissionais.map(p => p.nome));
     return profissionais;
   }, [profissionais, isFuncionario, usuario]);
-
-  // Função segura para formatar valor
-  const formatarValor = (valor) => {
-    if (valor === null || valor === undefined) return '0,00';
-    const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
-    if (isNaN(numero)) return '0,00';
-    return numero.toFixed(2).replace('.', ',');
-  };
 
   // Aplicar filtros nos agendamentos
   const agendamentosFiltrados = React.useMemo(() => {
@@ -65,12 +65,10 @@ const TimelineAgendamentos = ({
     return agendamentos.filter(ag => {
       if (!isSameDay(new Date(ag.data_hora), dataSelecionada)) return false;
       
-      // Se for funcionário, mostra SÓ os dele
       if (isFuncionario && usuario?.funcionarioId) {
         return ag.funcionario_id === usuario.funcionarioId;
       }
       
-      // Para admin/gerente, aplica os filtros normais
       if (filtroProfissional && filtroProfissional !== 'todos') {
         if (ag.funcionario_id !== parseInt(filtroProfissional)) return false;
       }
@@ -91,7 +89,15 @@ const TimelineAgendamentos = ({
     return horariosDisponiveis;
   }, [horariosDisponiveis, loading]);
 
-  // Funções para controlar o scroll e as setas
+  // Função para formatar valor
+  const formatarValor = (valor) => {
+    if (valor === null || valor === undefined) return '0,00';
+    const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
+    if (isNaN(numero)) return '0,00';
+    return numero.toFixed(2).replace('.', ',');
+  };
+
+  // Funções de scroll
   const checkScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -100,7 +106,6 @@ const TimelineAgendamentos = ({
     }
   };
 
-  // Eventos de mouse para arrastar
   const handleMouseDown = (e) => {
     setIsDragging(true);
     setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
@@ -159,7 +164,6 @@ const TimelineAgendamentos = ({
   const larguraMinimaColuna = 280;
   const larguraTotal = profissionaisFiltrados.length * larguraMinimaColuna + 100;
 
-  // Se não houver profissionais filtrados
   if (!profissionaisFiltrados || profissionaisFiltrados.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-lg p-8 text-center">
@@ -175,7 +179,6 @@ const TimelineAgendamentos = ({
 
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden relative">
-      {/* Setas de navegação - SÓ MOSTRA SE TIVER MAIS DE 1 PROFISSIONAL */}
       {profissionaisFiltrados.length > 1 && showLeftArrow && (
         <button
           onClick={scrollLeftHandler}
@@ -196,7 +199,6 @@ const TimelineAgendamentos = ({
         </button>
       )}
 
-      {/* Container com scroll horizontal e arrasto por mouse */}
       <div 
         ref={scrollContainerRef}
         className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 cursor-grab active:cursor-grabbing"
@@ -256,11 +258,10 @@ const TimelineAgendamentos = ({
                 </div>
 
                 {profissionaisFiltrados.map((prof) => {
+                  // 🔥 CORREÇÃO: Encontrar agendamento pela hora extraída (SEM CONVERSÃO)
                   const agendamento = agendamentosFiltrados.find(ag => {
                     if (!ag?.data_hora) return false;
-                    const dataAg = new Date(ag.data_hora);
-                    const horaAgendamento = dataAg.getHours().toString().padStart(2, '0') + ':' + 
-                                           dataAg.getMinutes().toString().padStart(2, '0');
+                    const horaAgendamento = extrairHoraCorreta(ag.data_hora);
                     return ag.funcionario_id === prof.id && horaAgendamento === hora;
                   });
 
@@ -303,7 +304,10 @@ const TimelineAgendamentos = ({
                     <div 
                       key={prof.id} 
                       className="p-4 border-l border-gray-200 cursor-pointer hover:bg-gray-100 transition-all min-w-[280px] group"
-                      onClick={() => onNovo?.(prof.id, hora)}
+                      onClick={() => {
+                        console.log('🕐 CLIQUE NO TIMELINE - HORÁRIO:', hora);
+                        onNovo?.(prof.id, hora);
+                      }}
                       style={{ pointerEvents: 'auto' }}
                     >
                       <div className="h-full flex items-center justify-center">
@@ -320,14 +324,12 @@ const TimelineAgendamentos = ({
         </div>
       </div>
 
-      {/* Indicador de arraste - SÓ MOSTRA SE TIVER MAIS DE 1 PROFISSIONAL */}
       {profissionaisFiltrados.length > 1 && (
         <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 bg-gray-50/50">
           ← Arraste para o lado para ver mais profissionais (clique nos agendamentos para editar) →
         </div>
       )}
 
-      {/* Mensagem para funcionário quando está sozinho */}
       {isFuncionario && profissionaisFiltrados.length === 1 && (
         <div className="text-xs text-blue-600 text-center py-2 border-t border-gray-100 bg-blue-50">
           ✓ Mostrando apenas seus agendamentos
