@@ -1,5 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import funcionariosService from '../services/funcionariosService';
+import usuariosService from '../services/usuariosService';
+import api from '../services/api';
 
 const AuthContext = createContext();
 
@@ -90,54 +92,38 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Carregar usuários
+  // 🔥 CARREGAR USUÁRIOS DO BACKEND (BANCO DE DADOS)
   const carregarUsuarios = async () => {
     try {
-      const storedUsuarios = localStorage.getItem('usuarios');
-      let usuariosCarregados = storedUsuarios ? JSON.parse(storedUsuarios) : [];
-      
-      if (usuariosCarregados.length === 0) {
-        const usuariosIniciais = [
-          {
-            id: 1,
-            funcionarioId: null,
-            nome: 'Administrador',
-            email: 'admin@vailsonhair.com',
-            login: 'admin',
-            senha: 'admin123',
-            nivel: 'admin',
-            ativo: true,
-            avatar: 'AD',
-            cor: 'bg-red-500'
-          }
-        ];
-        usuariosCarregados = usuariosIniciais;
-        localStorage.setItem('usuarios', JSON.stringify(usuariosIniciais));
-      }
-      
-      setUsuarios(usuariosCarregados);
-      console.log('✅ Usuários carregados:', usuariosCarregados.length);
+      const data = await usuariosService.listar();
+      setUsuarios(data);
+      console.log('✅ Usuários carregados do backend:', data.length);
+      return data;
     } catch (error) {
       console.error('❌ Erro ao carregar usuários:', error);
+      setUsuarios([]);
+      return [];
     }
   };
 
-  // Carregar todos os dados
+  // Carregar todos os dados iniciais
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
-      await carregarFuncionarios();
-      await carregarUsuarios();
+      await Promise.all([
+        carregarFuncionarios(),
+        carregarUsuarios()
+      ]);
       setLoading(false);
     };
     
     carregarDados();
   }, []);
 
-  // ⚠️ PARTE CRÍTICA - VOLTAR COMO ERA ANTES ⚠️
+  // 🔥 RECUPERAR USUÁRIO DO localStorage APÓS LOGIN
   useEffect(() => {
     const storedUser = localStorage.getItem('usuario');
-    if (storedUser) {
+    if (storedUser && !usuario) {
       const userData = JSON.parse(storedUser);
       
       // Validar se o funcionário ainda existe
@@ -153,39 +139,56 @@ export const AuthProvider = ({ children }) => {
       
       setUsuario(userData);
     }
-    setLoading(false);
-  }, [funcionarios]); // Dependência em funcionarios
+  }, [funcionarios, usuario]);
 
+  // 🔥 LOGIN VIA BACKEND
   const login = async (login, senha) => {
-    const usuarioEncontrado = usuarios.find(
-      u => u.login === login && u.senha === senha && u.ativo
-    );
-
-    if (usuarioEncontrado) {
-      let dadosFuncionario = null;
-      if (usuarioEncontrado.funcionarioId) {
-        dadosFuncionario = funcionarios.find(f => f.id === usuarioEncontrado.funcionarioId);
-        
-        if (!dadosFuncionario) {
-          return { 
-            success: false, 
-            error: 'Funcionário vinculado não existe mais. Contate o administrador.' 
-          };
-        }
-      }
-
-      const { senha: _, ...usuarioSemSenha } = usuarioEncontrado;
-      const usuarioComPermissoes = {
-        ...usuarioSemSenha,
-        ...dadosFuncionario,
-        permissoes: niveisAcesso[usuarioEncontrado.nivel]?.permissoes || niveisAcesso.funcionario.permissoes
-      };
+    try {
+      const response = await api.post('/auth/login', { login, senha });
       
-      setUsuario(usuarioComPermissoes);
-      localStorage.setItem('usuario', JSON.stringify(usuarioComPermissoes));
-      return { success: true, usuario: usuarioComPermissoes };
-    } else {
-      return { success: false, error: 'Login ou senha inválidos' };
+      if (response.data.success) {
+        const usuarioData = response.data.usuario;
+        
+        let dadosFuncionario = null;
+        if (usuarioData.funcionario_id) {
+          dadosFuncionario = funcionarios.find(f => f.id === usuarioData.funcionario_id);
+        }
+
+        const getCorPorId = (id) => {
+          const cores = [
+            'bg-purple-500', 'bg-pink-500', 'bg-blue-500', 
+            'bg-yellow-500', 'bg-green-500', 'bg-indigo-500', 
+            'bg-red-500', 'bg-teal-500', 'bg-orange-500'
+          ];
+          return cores[((id || 1) - 1) % cores.length] || 'bg-gray-500';
+        };
+
+        const usuarioComPermissoes = {
+          id: usuarioData.id,
+          nome: usuarioData.nome,
+          email: usuarioData.email,
+          login: usuarioData.login,
+          nivel: usuarioData.nivel,
+          funcionarioId: usuarioData.funcionario_id,
+          ativo: usuarioData.ativo,
+          avatar: dadosFuncionario?.avatar || usuarioData.nome.substring(0, 2).toUpperCase(),
+          cor: dadosFuncionario?.cor || getCorPorId(usuarioData.id),
+          ...dadosFuncionario,
+          permissoes: niveisAcesso[usuarioData.nivel]?.permissoes || niveisAcesso.funcionario.permissoes
+        };
+        
+        setUsuario(usuarioComPermissoes);
+        localStorage.setItem('usuario', JSON.stringify(usuarioComPermissoes));
+        return { success: true, usuario: usuarioComPermissoes };
+      }
+      
+      return { success: false, error: response.data.error || 'Login ou senha inválidos' };
+    } catch (error) {
+      console.error('❌ Erro no login:', error);
+      if (error.response?.status === 401) {
+        return { success: false, error: 'Login ou senha inválidos' };
+      }
+      return { success: false, error: 'Erro ao conectar com o servidor' };
     }
   };
 
@@ -209,78 +212,99 @@ export const AuthProvider = ({ children }) => {
     return dados.filter(item => item[campoId] === usuario.funcionarioId);
   };
 
-  const adicionarUsuario = (novoUsuario) => {
-    const usuarioComId = {
-      ...novoUsuario,
-      id: usuarios.length + 1,
-      ativo: true
-    };
-    const novosUsuarios = [...usuarios, usuarioComId];
-    setUsuarios(novosUsuarios);
-    localStorage.setItem('usuarios', JSON.stringify(novosUsuarios));
-    return usuarioComId;
+  // 🔥 ADICIONAR USUÁRIO VIA BACKEND
+  const adicionarUsuario = async (novoUsuario) => {
+    try {
+      const response = await usuariosService.criar(novoUsuario);
+      await carregarUsuarios(); // Recarregar lista
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao adicionar usuário:', error);
+      throw error;
+    }
   };
 
-  const atualizarUsuario = (id, dadosAtualizados) => {
-    const novosUsuarios = usuarios.map(u => 
-      u.id === id ? { ...u, ...dadosAtualizados } : u
-    );
-    setUsuarios(novosUsuarios);
-    localStorage.setItem('usuarios', JSON.stringify(novosUsuarios));
-    
-    if (usuario && usuario.id === id) {
-      let dadosFuncionario = null;
-      if (dadosAtualizados.funcionarioId) {
-        dadosFuncionario = funcionarios.find(f => f.id === dadosAtualizados.funcionarioId);
-      }
+  // 🔥 ATUALIZAR USUÁRIO VIA BACKEND
+  const atualizarUsuario = async (id, dadosAtualizados) => {
+    try {
+      await usuariosService.atualizar(id, dadosAtualizados);
+      await carregarUsuarios(); // Recarregar lista
       
-      const usuarioAtualizado = { 
-        ...usuario, 
-        ...dadosAtualizados,
-        ...dadosFuncionario 
-      };
-      setUsuario(usuarioAtualizado);
-      localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+      // Se o usuário atualizou a si mesmo, atualizar o estado
+      if (usuario && usuario.id === id) {
+        const usuarioAtualizado = usuarios.find(u => u.id === id);
+        if (usuarioAtualizado) {
+          const dadosFuncionario = funcionarios.find(f => f.id === usuarioAtualizado.funcionario_id);
+          const getCorPorId = (id) => {
+            const cores = [
+              'bg-purple-500', 'bg-pink-500', 'bg-blue-500', 
+              'bg-yellow-500', 'bg-green-500', 'bg-indigo-500', 
+              'bg-red-500', 'bg-teal-500', 'bg-orange-500'
+            ];
+            return cores[((id || 1) - 1) % cores.length] || 'bg-gray-500';
+          };
+          
+          const usuarioComPermissoes = {
+            ...usuarioAtualizado,
+            ...dadosFuncionario,
+            permissoes: niveisAcesso[usuarioAtualizado.nivel]?.permissoes
+          };
+          setUsuario(usuarioComPermissoes);
+          localStorage.setItem('usuario', JSON.stringify(usuarioComPermissoes));
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao atualizar usuário:', error);
+      throw error;
     }
   };
 
-  const desativarUsuario = (id) => {
-    const novosUsuarios = usuarios.map(u => 
-      u.id === id ? { ...u, ativo: false } : u
-    );
-    setUsuarios(novosUsuarios);
-    localStorage.setItem('usuarios', JSON.stringify(novosUsuarios));
-    
-    if (usuario && usuario.id === id) {
-      logout();
+  // 🔥 DESATIVAR USUÁRIO VIA BACKEND
+  const desativarUsuario = async (id) => {
+    try {
+      await usuariosService.desativar(id);
+      await carregarUsuarios(); // Recarregar lista
+      
+      if (usuario && usuario.id === id) {
+        logout();
+      }
+    } catch (error) {
+      console.error('❌ Erro ao desativar usuário:', error);
+      throw error;
     }
   };
 
-  const ativarUsuario = (id) => {
-    const novosUsuarios = usuarios.map(u => 
-      u.id === id ? { ...u, ativo: true } : u
-    );
-    setUsuarios(novosUsuarios);
-    localStorage.setItem('usuarios', JSON.stringify(novosUsuarios));
+  // 🔥 ATIVAR USUÁRIO VIA BACKEND
+  const ativarUsuario = async (id) => {
+    try {
+      await usuariosService.ativar(id);
+      await carregarUsuarios(); // Recarregar lista
+    } catch (error) {
+      console.error('❌ Erro ao ativar usuário:', error);
+      throw error;
+    }
   };
 
-  const alterarSenha = (id, senhaAtual, novaSenha) => {
-    const usuarioEncontrado = usuarios.find(u => u.id === id);
-    if (usuarioEncontrado && usuarioEncontrado.senha === senhaAtual) {
-      const novosUsuarios = usuarios.map(u => 
-        u.id === id ? { ...u, senha: novaSenha } : u
-      );
-      setUsuarios(novosUsuarios);
-      localStorage.setItem('usuarios', JSON.stringify(novosUsuarios));
-      return { success: true };
+  // 🔥 ALTERAR SENHA VIA BACKEND
+  const alterarSenha = async (id, senhaAtual, novaSenha) => {
+    try {
+      const response = await usuariosService.alterarSenha(id, senhaAtual, novaSenha);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao alterar senha:', error);
+      if (error.response?.status === 400) {
+        return { success: false, error: error.response.data.error };
+      }
+      return { success: false, error: 'Erro ao alterar senha' };
     }
-    return { success: false, error: 'Senha atual incorreta' };
   };
 
   const recarregarDados = async () => {
     setLoading(true);
-    await carregarFuncionarios();
-    await carregarUsuarios();
+    await Promise.all([
+      carregarFuncionarios(),
+      carregarUsuarios()
+    ]);
     setLoading(false);
   };
 
