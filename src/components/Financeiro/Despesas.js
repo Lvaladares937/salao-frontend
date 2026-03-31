@@ -6,7 +6,7 @@ const Despesas = ({
   pagamentosFuncionarios = [], 
   onAdicionar, 
   onRemover,
-  onRemoverPagamentoFuncionario // <-- ADICIONE ESTA PROP
+  onRemoverPagamentoFuncionario
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [novaDespesa, setNovaDespesa] = useState({
@@ -75,7 +75,6 @@ const Despesas = ({
   const handleRemover = (item) => {
     if (item.tipo === 'pagamento_funcionario') {
       if (window.confirm(`Remover pagamento de ${item.descricao}?`)) {
-        // Verificar se a função existe antes de chamar
         if (onRemoverPagamentoFuncionario) {
           onRemoverPagamentoFuncionario(item.originalId);
         } else {
@@ -108,7 +107,6 @@ const Despesas = ({
 
       {showForm && (
         <form onSubmit={handleSubmit} className="mb-6 p-4 bg-gray-50 rounded-lg space-y-4">
-          {/* Formulário (mantido igual) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Descrição *
