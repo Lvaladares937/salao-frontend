@@ -986,7 +986,7 @@ const ModalAgendamento = ({
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 flex justify-end gap-3">
-          {agendamentoSelecionado && (
+          {agendamentoSelecionado && onExcluir && typeof onExcluir === 'function' && (
             <button 
               onClick={() => onExcluir(agendamentoSelecionado.id)}
               className="btn-danger"
