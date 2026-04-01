@@ -51,7 +51,7 @@ const TimelineAgendamentos = ({
 // 🔥 FUNÇÃO PARA ORDENAR PROFISSIONAL NA ORDEM DESEJADA
 const ordenarProfissionais = (lista) => {
   // 🔥 ORDEM PERSONALIZADA - Vailson (18 e 7) primeiros
-  const ordemDesejada = [18, 3, 15, 13, 16, 14, 17, 8, 4, 3, 2, 11, 1, 5, 6, 9, 10];
+  const ordemDesejada = [18, 17, 15, 13, 16, 14, 3, 8, 4, 3, 2, 11, 1, 5, 6, 9, 10];
   
   return [...lista].sort((a, b) => {
     const indexA = ordemDesejada.indexOf(a.id);
