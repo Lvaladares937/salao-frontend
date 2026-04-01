@@ -48,14 +48,39 @@ const TimelineAgendamentos = ({
   
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
-  // FILTRO DE PROFISSIONAIS
+// 🔥 FUNÇÃO PARA ORDENAR PROFISSIONAL NA ORDEM DESEJADA
+const ordenarProfissionais = (lista) => {
+  // 🔥 ORDEM PERSONALIZADA - Vailson (18 e 7) primeiros
+  const ordemDesejada = [18, 7, 13, 17, 16, 15, 14, 12, 8, 4, 3, 2, 11, 1, 5, 6, 9, 10];
+  
+  return [...lista].sort((a, b) => {
+    const indexA = ordemDesejada.indexOf(a.id);
+    const indexB = ordemDesejada.indexOf(b.id);
+    
+    // Se o ID não estiver na lista, coloca no final
+    if (indexA === -1 && indexB === -1) return a.nome.localeCompare(b.nome);
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+};
+
+  // FILTRO DE PROFISSIONAIS (COM ORDENAÇÃO)
   const profissionaisFiltrados = React.useMemo(() => {
     if (!profissionais) return [];
     
+    let lista = [...profissionais];
+    
     if (isFuncionario && usuario?.funcionarioId) {
-      return profissionais.filter(prof => prof.id === usuario.funcionarioId);
+      lista = lista.filter(prof => prof.id === usuario.funcionarioId);
     }
-    return profissionais;
+    
+    // 🔥 APLICAR ORDENAÇÃO (apenas se não for funcionário, senão só 1 profissional)
+    if (!isFuncionario) {
+      lista = ordenarProfissionais(lista);
+    }
+    
+    return lista;
   }, [profissionais, isFuncionario, usuario]);
 
   // Aplicar filtros nos agendamentos
@@ -213,7 +238,7 @@ const TimelineAgendamentos = ({
         }}
       >
         <div style={{ minWidth: `${larguraTotal}px` }}>
-          {/* Cabeçalho dos profissionais */}
+          {/* Cabeçalho dos profissionais (já na ordem correta) */}
           <div 
             className="grid bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 sticky top-0"
             style={{ 
