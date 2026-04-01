@@ -7,7 +7,7 @@ import FluxoCaixa from './FluxoCaixa';
 import ComissoesGerais from './ComissoesGerais';
 import Despesas from './Despesas';
 import { meses, anos } from './constants';
-import api from '../../services/api';
+import financeiroService from '../../services/financeiroService'; // 🔥 ALTERADO: agora importa financeiroService
 
 const Financeiro = () => {
   const {
@@ -108,44 +108,29 @@ const Financeiro = () => {
     }
   }, [vendas, calcularComissoesPorFuncionario, isAdminOrGerente, isFuncionario, funcionarioId, usuario]);
 
-  // 🔥 FUNÇÃO PARA CARREGAR COMISSÕES DE UM MÊS/ANO ESPECÍFICO
+  // 🔥 FUNÇÃO CORRIGIDA PARA CARREGAR COMISSÕES - USANDO A ROTA CORRETA
   const carregarComissoesPorMesAno = useCallback(async (mes, ano) => {
     setLoadingComissoes(true);
     try {
       console.log(`🔍 Buscando comissões para ${meses[mes]}/${ano}`);
       
-      const response = await api.get('/financeiro/vendas', {
-        params: { mes: mes + 1, ano }
-      });
+      // ✅ CORRETO: Usar a rota de comissões que calcula com base nos agendamentos
+      const comissoesCalculadas = await financeiroService.listarComissoes(mes + 1, ano);
       
-      const vendasData = response.data;
-      const comissoesCalculadas = {};
+      console.log(`📊 Comissões retornadas: ${comissoesCalculadas.length}`);
       
-      vendasData.forEach(venda => {
-        // Se for funcionário, filtrar apenas suas vendas
-        if (isFuncionario && venda.funcionario_id !== funcionarioId) {
-          return;
-        }
-        
-        if (venda?.funcionario_id) {
-          if (!comissoesCalculadas[venda.funcionario_id]) {
-            comissoesCalculadas[venda.funcionario_id] = {
-              funcionario_id: venda.funcionario_id,
-              funcionario_nome: venda.funcionario_nome || 'Funcionário',
-              totalVendas: 0,
-              comissao: 0
-            };
-          }
-          const valorVenda = Number(venda.valor_total) || 0;
-          comissoesCalculadas[venda.funcionario_id].totalVendas += valorVenda;
-          comissoesCalculadas[venda.funcionario_id].comissao += valorVenda * 0.1;
-        }
-      });
+      // Se for funcionário, filtrar apenas suas comissões
+      let comissoesFiltradas = comissoesCalculadas;
+      if (isFuncionario && funcionarioId) {
+        comissoesFiltradas = comissoesCalculadas.filter(c => c.funcionario_id === funcionarioId);
+        console.log(`👤 Funcionário filtrado: ${comissoesFiltradas.length} registros`);
+      }
       
-      setComissoesData(Object.values(comissoesCalculadas));
+      setComissoesData(comissoesFiltradas);
       
     } catch (error) {
       console.error('❌ Erro ao carregar comissões:', error);
+      console.error('Detalhes:', error.response?.data || error.message);
       setComissoesData([]);
     } finally {
       setLoadingComissoes(false);
