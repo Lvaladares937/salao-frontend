@@ -17,6 +17,22 @@ const financeiroService = {
     }
   },
 
+  // 🔥 NOVA FUNÇÃO: Buscar comissões calculadas com base nos agendamentos
+  listarComissoes: async (mes, ano, funcionarioId = null) => {
+    try {
+      let url = `/financeiro/comissoes?mes=${mes}&ano=${ano}`;
+      if (funcionarioId) {
+        url += `&funcionario_id=${funcionarioId}`;
+      }
+      console.log('🌐 Buscando comissões:', url);
+      const response = await api.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao listar comissões:', error);
+      throw error;
+    }
+  },
+
   // Listar despesas
   listarDespesas: async (mes, ano) => {
     try {
@@ -37,6 +53,17 @@ const financeiroService = {
       return response.data;
     } catch (error) {
       console.error('Erro ao adicionar despesa:', error);
+      throw error;
+    }
+  },
+
+  // Atualizar despesa
+  atualizarDespesa: async (id, despesa) => {
+    try {
+      const response = await api.put(`/financeiro/despesas/${id}`, despesa);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao atualizar despesa:', error);
       throw error;
     }
   },
