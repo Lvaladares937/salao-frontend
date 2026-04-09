@@ -403,7 +403,7 @@ export const useAgendamentos = () => {
     const valorComissao = servico.preco * (percentualComissao / 100);
     
     // 🔥 CORREÇÃO: Enviar o horário LOCAL sem conversão
-    const dataHoraLocal = `${formData.data}T${formData.hora}:00`;
+    const dataHoraLocal = localToISO(formData.data, formData.hora);
     
     console.log('🔍 Horário local clicado:', `${formData.data} ${formData.hora}`);
     console.log('🔍 Horário enviado para API:', dataHoraLocal);
