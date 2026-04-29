@@ -71,35 +71,75 @@ const Configuracoes = () => {
     }
   };
 
-  const handleComissaoChange = (servicoId, valor) => {
+  // NOVA FUNÇÃO: Iniciar edição completa do serviço
+  const iniciarEdicaoServico = (servico) => {
     setServicosEditando(prev => ({
       ...prev,
-      [servicoId]: valor
+      [servico.id]: {
+        nome: servico.nome,
+        preco: servico.preco,
+        duracao: servico.duracao_minutos,
+        comissao: servico.comissao_percentual || configGeral.comissaoPadrao
+      }
     }));
   };
 
-  const salvarComissao = async (servicoId) => {
+  const salvarServicoCompleto = async (servicoId) => {
     try {
-      const novaComissao = servicosEditando[servicoId];
-      await configService.atualizarComissao(servicoId, novaComissao);
+      const dadosEditados = servicosEditando[servicoId];
+      const servicoOriginal = servicos.find(s => s.id === servicoId);
       
-      // Atualizar lista local
-      setServicos(prev => prev.map(s => 
-        s.id === servicoId ? { ...s, comissao_percentual: novaComissao } : s
-      ));
+      if (!servicoOriginal) {
+        alert('Serviço não encontrado!');
+        return;
+      }
       
-      // Remover do estado de edição
+      // VALIDAÇÕES
+      if (!dadosEditados.nome || dadosEditados.nome.trim() === '') {
+        alert('O nome do serviço é obrigatório');
+        return;
+      }
+      
+      if (!dadosEditados.preco || dadosEditados.preco <= 0) {
+        alert('O preço deve ser maior que zero');
+        return;
+      }
+      
+      // Preparar dados COMPLETOS usando o serviço original
+      const dadosCompletos = {
+        nome: dadosEditados.nome.trim(),
+        categoria: servicoOriginal.categoria || 'Sem categoria',
+        preco: parseFloat(dadosEditados.preco),
+        duracao_minutos: parseInt(dadosEditados.duracao) || servicoOriginal.duracao_minutos,
+        comissao_percentual: parseInt(dadosEditados.comissao) || servicoOriginal.comissao_percentual,
+        descricao: servicoOriginal.descricao || ''
+      };
+      
+      console.log('📤 Enviando atualização:', dadosCompletos);
+      
+      // Enviar para o backend
+      await configService.atualizarServicoCompleto(servicoId, dadosCompletos);
+      
+      // Recarregar a lista de serviços
+      await carregarServicos();
+      
+      // Limpar estado de edição
       const newEditando = { ...servicosEditando };
       delete newEditando[servicoId];
       setServicosEditando(newEditando);
       
-      alert('Comissão atualizada com sucesso!');
+      alert('✅ Serviço atualizado com sucesso!');
     } catch (error) {
-      alert('Erro ao atualizar comissão');
-      console.error(error);
+      console.error('❌ Erro detalhado:', error);
+      console.error('📦 Resposta:', error.response?.data);
+      
+      // Mensagem de erro mais amigável
+      const errorMsg = error.response?.data?.error || error.message || 'Erro ao atualizar serviço';
+      alert(`Erro: ${errorMsg}`);
     }
   };
 
+  // FUNÇÃO MODIFICADA: Cancelar edição
   const cancelarEdicao = (servicoId) => {
     const newEditando = { ...servicosEditando };
     delete newEditando[servicoId];
@@ -191,8 +231,8 @@ const Configuracoes = () => {
     { id: 'notificacoes', nome: 'Notificações', icone: Bell },
     { id: 'comissoes', nome: 'Comissões', icone: DollarSign },
     { id: 'chatbot', nome: 'ChatBot', icone: MessageCircle },
-    { id: 'horarios', nome: 'Horários', icone: Clock }, // Atualizado
-    { id: 'usuarios', nome: 'Usuários', icone: Users }, // Atualizado
+    { id: 'horarios', nome: 'Horários', icone: Clock },
+    { id: 'usuarios', nome: 'Usuários', icone: Users },
     { id: 'seguranca', nome: 'Segurança', icone: Shield },
   ];
 
@@ -338,7 +378,7 @@ const Configuracoes = () => {
               </div>
             )}
 
-            {/* Aba de Comissões - TOTALMENTE RESTAURADA */}
+            {/* Aba de Comissões - MODIFICADA COM EDIÇÃO COMPLETA */}
             {activeTab === 'comissoes' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -501,17 +541,58 @@ const Configuracoes = () => {
                       <tbody className="divide-y divide-gray-200">
                         {servicos.map(servico => (
                           <tr key={servico.id} className="hover:bg-gray-50">
-                            <td className="table-cell font-medium">{servico.nome}</td>
+                            <td className="table-cell">
+                              {servicosEditando[servico.id] ? (
+                                <input
+                                  type="text"
+                                  className="w-full px-2 py-1 border rounded text-sm"
+                                  value={servicosEditando[servico.id].nome}
+                                  onChange={(e) => setServicosEditando(prev => ({
+                                    ...prev,
+                                    [servico.id]: { ...prev[servico.id], nome: e.target.value }
+                                  }))}
+                                />
+                              ) : (
+                                <span className="font-medium">{servico.nome}</span>
+                              )}
+                            </td>
                             <td className="table-cell">
                               <span className="px-2 py-1 bg-gray-100 rounded-full text-xs">
                                 {servico.categoria || 'Sem categoria'}
                               </span>
                             </td>
                             <td className="table-cell">
-                              R$ {parseFloat(servico.preco).toFixed(2).replace('.', ',')}
+                              {servicosEditando[servico.id] ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  className="w-24 px-2 py-1 border rounded text-sm"
+                                  value={servicosEditando[servico.id].preco}
+                                  onChange={(e) => setServicosEditando(prev => ({
+                                    ...prev,
+                                    [servico.id]: { ...prev[servico.id], preco: parseFloat(e.target.value) }
+                                  }))}
+                                />
+                              ) : (
+                                `R$ ${parseFloat(servico.preco).toFixed(2).replace('.', ',')}`
+                              )}
                             </td>
                             <td className="table-cell">
-                              {servico.duracao_minutos} min
+                              {servicosEditando[servico.id] ? (
+                                <input
+                                  type="number"
+                                  className="w-20 px-2 py-1 border rounded text-sm"
+                                  value={servicosEditando[servico.id].duracao}
+                                  onChange={(e) => setServicosEditando(prev => ({
+                                    ...prev,
+                                    [servico.id]: { ...prev[servico.id], duracao: parseInt(e.target.value) }
+                                  }))}
+                                  min="15"
+                                  step="15"
+                                />
+                              ) : (
+                                `${servico.duracao_minutos} min`
+                              )}
                             </td>
                             <td className="table-cell">
                               <span className="font-semibold text-blue-600">
@@ -519,12 +600,15 @@ const Configuracoes = () => {
                               </span>
                             </td>
                             <td className="table-cell">
-                              {servicosEditando[servico.id] !== undefined ? (
+                              {servicosEditando[servico.id] ? (
                                 <input
                                   type="number"
                                   className="w-20 px-2 py-1 border rounded text-sm"
-                                  value={servicosEditando[servico.id]}
-                                  onChange={(e) => handleComissaoChange(servico.id, parseInt(e.target.value))}
+                                  value={servicosEditando[servico.id].comissao}
+                                  onChange={(e) => setServicosEditando(prev => ({
+                                    ...prev,
+                                    [servico.id]: { ...prev[servico.id], comissao: parseInt(e.target.value) }
+                                  }))}
                                   min="0"
                                   max="100"
                                 />
@@ -534,10 +618,10 @@ const Configuracoes = () => {
                             </td>
                             <td className="table-cell">
                               <div className="flex gap-2">
-                                {servicosEditando[servico.id] !== undefined ? (
+                                {servicosEditando[servico.id] ? (
                                   <>
                                     <button
-                                      onClick={() => salvarComissao(servico.id)}
+                                      onClick={() => salvarServicoCompleto(servico.id)}
                                       className="p-1 hover:bg-green-100 rounded"
                                       title="Salvar"
                                     >
@@ -554,9 +638,9 @@ const Configuracoes = () => {
                                 ) : (
                                   <>
                                     <button
-                                      onClick={() => handleComissaoChange(servico.id, servico.comissao_percentual || configGeral.comissaoPadrao)}
+                                      onClick={() => iniciarEdicaoServico(servico)}
                                       className="p-1 hover:bg-blue-100 rounded"
-                                      title="Editar comissão"
+                                      title="Editar serviço"
                                     >
                                       <Edit2 className="w-4 h-4 text-blue-600" />
                                     </button>
@@ -648,8 +732,7 @@ const Configuracoes = () => {
               </div>
             )}
             
-
-                        {/* Aba de Segurança */}
+            {/* Aba de Segurança */}
             {activeTab === 'seguranca' && (
               <Seguranca />
             )}
