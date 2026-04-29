@@ -34,6 +34,18 @@ const configService = {
     }
   },
 
+  // NOVO MÉTODO: Atualizar serviço completo (nome, preço, duração e comissão)
+  atualizarServicoCompleto: async (servicoId, dados) => {
+    try {
+      // Usando o endpoint PUT que já existe no seu backend
+      const response = await api.put(`/servicos/${servicoId}`, dados);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao atualizar serviço completo:', error);
+      throw error;
+    }
+  },
+
   // Atualizar comissão por categoria
   atualizarComissaoPorCategoria: async (categoria, comissao) => {
     try {
