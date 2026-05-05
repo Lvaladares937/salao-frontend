@@ -48,6 +48,20 @@ const formatarData = (dataStr) => {
   return format(data, 'dd/MM/yyyy');
 };
 
+// 🔥 FUNÇÃO PARA FORMATAR VALOR COM PERSONALIZADO
+const formatarValorComPersonalizado = (agendamento) => {
+  const valor = agendamento.valor_personalizado || agendamento.valor;
+  if (valor === null || valor === undefined) return '0,00';
+  const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
+  if (isNaN(numero)) return '0,00';
+  return numero.toFixed(2).replace('.', ',');
+};
+
+// 🔥 FUNÇÃO PARA VERIFICAR SE TEM VALOR PERSONALIZADO
+const temValorPersonalizado = (agendamento) => {
+  return agendamento.valor_personalizado && agendamento.valor_personalizado !== agendamento.valor;
+};
+
 // 🔥 FUNÇÃO PARA CORES BASEADAS NA DURAÇÃO
 const getDuracaoColors = (duracaoMinutos) => {
   if (!duracaoMinutos) return { 
@@ -112,7 +126,7 @@ const getDuracaoColors = (duracaoMinutos) => {
   }
 };
 
-// 🔥 COMPONENTE DE MODAL DE CONFIRMAÇÃO - CORRIGIDO PARA MOSTRAR A DATA
+// 🔥 COMPONENTE DE MODAL DE CONFIRMAÇÃO
 const ModalConfirmacaoSobreposicao = ({ show, onConfirm, onCancel, agendamentoConflitante, novoHorario, dataSelecionada }) => {
   if (!show) return null;
   
@@ -291,29 +305,22 @@ const TimelineAgendamentos = ({
     return horario === agendamento.horaInicio;
   };
 
-  // 🔥 FUNÇÃO PARA QUANDO CLICAR NO BOTÃO AGENDAR
   const handleAgendarClick = (profissionalId, horario) => {
     const agendamentoConflito = getAgendamentoNoHorario(profissionalId, horario);
     
     if (agendamentoConflito) {
-      // 🔥 MOSTRA MODAL DE CONFIRMAÇÃO
       setAgendamentoConflitante(agendamentoConflito);
       setPendingAgendamento({ profissionalId, horario });
       setShowConfirmModal(true);
     } else {
-      // 🔥 CORREÇÃO: Só passa profissionalId e horario (sem a data)
       console.log('🕐 CLIQUE NORMAL - HORÁRIO:', horario);
       onNovo?.(profissionalId, horario);
     }
   };
 
-  // 🔥 CONFIRMAR FORÇAR AGENDAMENTO - CORREÇÃO FINAL
   const handleConfirmForcarAgendamento = () => {
     if (pendingAgendamento) {
       console.log('⚠️ FORÇANDO AGENDAMENTO - HORÁRIO:', pendingAgendamento.horario);
-      
-      // 🔥 CORREÇÃO: Só passa profissionalId e horario (sem a data)
-      // A data já está no estado do componente pai (dataSelecionada)
       onNovo?.(
         pendingAgendamento.profissionalId, 
         pendingAgendamento.horario
@@ -330,14 +337,7 @@ const TimelineAgendamentos = ({
     setAgendamentoConflitante(null);
   };
 
-  const formatarValor = (valor) => {
-    if (valor === null || valor === undefined) return '0,00';
-    const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
-    if (isNaN(numero)) return '0,00';
-    return numero.toFixed(2).replace('.', ',');
-  };
-
-  // Funções de scroll (mantidas iguais)
+  // Funções de scroll
   const checkScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -504,6 +504,8 @@ const TimelineAgendamentos = ({
                       const duracao = agendamento.duracao;
                       const coresStatus = getStatusColor(agendamento.status);
                       const coresDuracao = getDuracaoColors(duracao);
+                      const valorFormatado = formatarValorComPersonalizado(agendamento);
+                      const temPersonalizado = temValorPersonalizado(agendamento);
                       
                       if (isPrimeiro) {
                         return (
@@ -544,9 +546,17 @@ const TimelineAgendamentos = ({
                               </div>
                               
                               <div className="flex flex-col items-end gap-1">
-                                <span className="text-xs bg-white bg-opacity-70 px-2 py-1 rounded-full font-bold shadow-sm">
-                                  R$ {formatarValor(agendamento.valor)}
-                                </span>
+                                <div className="flex flex-col items-end">
+                                  {temPersonalizado && (
+                                    <span className="text-xs text-gray-400 line-through">
+                                      R$ {formatarValorComPersonalizado({...agendamento, valor_personalizado: null})}
+                                    </span>
+                                  )}
+                                  <span className={`text-xs px-2 py-1 rounded-full font-bold shadow-sm ${temPersonalizado ? 'bg-purple-100 text-purple-700' : 'bg-white bg-opacity-70'}`}>
+                                    R$ {valorFormatado}
+                                    {temPersonalizado && <span className="ml-1 text-purple-600">✨</span>}
+                                  </span>
+                                </div>
                                 <span className={`text-xs px-1.5 py-0.5 rounded-full bg-white bg-opacity-60 ${coresDuracao.text}`}>
                                   {coresDuracao.label}
                                 </span>
@@ -644,6 +654,10 @@ const TimelineAgendamentos = ({
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
               <span className="text-gray-600">120min+ (Extenso)</span>
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-purple-600">✨</span>
+              <span className="text-gray-600">Valor personalizado</span>
             </div>
           </div>
         </div>
