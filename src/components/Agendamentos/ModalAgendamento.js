@@ -344,12 +344,14 @@ const ModalAgendamento = ({
       if (servicoSelecionadoObj) {
         setBuscaServico(servicoSelecionadoObj.nome);
         setServicoSelecionado(servicoSelecionadoObj);
-        // 🔥 Resetar valor personalizado quando trocar de serviço
-        setValorPersonalizado(null);
-        setEditandoValor(false);
+        // 🔥 SÓ RESETAR SE FOR NOVO AGENDAMENTO (não estiver editando)
+        if (!agendamentoSelecionado) {
+          setValorPersonalizado(null);
+          setEditandoValor(false);
+        }
       }
     }
-  }, [formData.servicoId, servicos, show, dadosDoClique]);
+  }, [formData.servicoId, servicos, show, dadosDoClique, agendamentoSelecionado]);
 
   // Gerar horários disponíveis baseados nas configurações
   useEffect(() => {
@@ -424,9 +426,12 @@ const ModalAgendamento = ({
     setFormData({ ...formData, servicoId: servico.id });
     setServicoSelecionado(servico);
     setMostrarDropdownServico(false);
-    // 🔥 Resetar valor personalizado
-    setValorPersonalizado(null);
-    setEditandoValor(false);
+    
+    // 🔥 SÓ RESETAR SE FOR NOVO AGENDAMENTO
+    if (!agendamentoSelecionado) {
+      setValorPersonalizado(null);
+      setEditandoValor(false);
+    }
     
     if (dadosDoClique) {
       setDadosDoClique(false);
@@ -446,10 +451,13 @@ const ModalAgendamento = ({
     setFormData({ ...formData, servicoId: '' });
     setServicoSelecionado(null);
     setMostrarDropdownServico(false);
-    setValorPersonalizado(null);
-    setEditandoValor(false);
+    
+    // 🔥 SÓ RESETAR SE FOR NOVO AGENDAMENTO
+    if (!agendamentoSelecionado) {
+      setValorPersonalizado(null);
+      setEditandoValor(false);
+    }
   };
-
   // Função para atualizar apenas o status
   const handleStatusChange = (novoStatus) => {
     setFormData(prev => ({ 
