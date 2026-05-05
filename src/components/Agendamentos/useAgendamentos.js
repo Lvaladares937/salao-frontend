@@ -362,11 +362,11 @@ export const useAgendamentos = () => {
     setShowModal(true);
   };
 
-  // 🔥 FUNÇÃO PARA SALVAR AGENDAMENTO - ENVIAR HORÁRIO LOCAL
+  // 🔥 FUNÇÃO PARA SALVAR AGENDAMENTO - COM SUPORTE A VALOR PERSONALIZADO
   const salvarAgendamento = async (dadosPagamento = null) => {
     console.log('📝 Salvando agendamento:', formData);
     console.log('📝 Status atual:', formData.status);
-    console.log('💳 Dados de pagamento:', dadosPagamento);
+    console.log('💳 Dados de pagamento recebidos:', dadosPagamento);
     
     if (!formData.clienteId || !formData.profissionalId || !formData.servicoId) {
       alert('Preencha todos os campos obrigatórios');
@@ -399,25 +399,46 @@ export const useAgendamentos = () => {
       }
     }
 
+    // 🔥 PEGA O VALOR PERSONALIZADO (vem do dadosPagamento)
+    const valorOriginalServico = servico.preco;
+    // O valor personalizado pode vir de dadosPagamento.valor_personalizado
+    const valorPersonalizado = dadosPagamento?.valor_personalizado ?? null;
+    const valorFinal = (valorPersonalizado !== null && valorPersonalizado > 0 && valorPersonalizado !== valorOriginalServico) 
+      ? valorPersonalizado 
+      : valorOriginalServico;
+    
+    // 🔥 CALCULA COMISSÃO COM O VALOR FINAL
     const percentualComissao = calcularComissaoServico(servico, profissional);
-    const valorComissao = servico.preco * (percentualComissao / 100);
+    const valorComissao = valorFinal * (percentualComissao / 100);
     
     // 🔥 CORREÇÃO: Enviar o horário LOCAL sem conversão
-    const dataHoraLocal = localToISO(formData.data, formData.hora);
+    const dataHoraLocal = `${formData.data}T${formData.hora}:00`;
     
     console.log('🔍 Horário local clicado:', `${formData.data} ${formData.hora}`);
     console.log('🔍 Horário enviado para API:', dataHoraLocal);
+    console.log('💰 Valor original do serviço:', valorOriginalServico);
+    console.log('💰 Valor personalizado recebido:', valorPersonalizado);
+    console.log('💰 Valor final a ser cobrado:', valorFinal);
+    console.log('💰 Comissão calculada:', valorComissao);
+    console.log('💰 Percentual de comissão:', percentualComissao);
 
+    // 🔥 MONTAR OBJETO COMPLETO COM VALOR PERSONALIZADO
     const agendamentoData = {
       cliente_id: parseInt(formData.clienteId),
       funcionario_id: parseInt(formData.profissionalId),
       servico_id: parseInt(formData.servicoId),
-      data_hora: dataHoraLocal, // Envia como "2026-03-27T10:00:00"
+      data_hora: dataHoraLocal,
       status: formData.status,
       observacoes: formData.observacoes || '',
-      valor: servico.preco,
+      // 🔥 CAMPOS DE VALOR (obrigatórios para o backend)
+      valor: valorFinal,                                      // Valor final
+      valor_original: valorOriginalServico,                   // Valor original do serviço
+      valor_personalizado: (valorPersonalizado !== null && valorPersonalizado > 0 && valorPersonalizado !== valorOriginalServico) 
+        ? valorFinal 
+        : null,
       valor_comissao: valorComissao,
       percentual_comissao: percentualComissao,
+      // 🔥 CAMPOS DE PAGAMENTO (se for concluído)
       ...(dadosPagamento && {
         forma_pagamento: dadosPagamento.forma_pagamento,
         bandeira_cartao: dadosPagamento.bandeira_cartao,
@@ -426,7 +447,7 @@ export const useAgendamentos = () => {
       })
     };
 
-    console.log('📤 Enviando para API:', agendamentoData);
+    console.log('📤 Enviando para API:', JSON.stringify(agendamentoData, null, 2));
 
     try {
       if (agendamentoSelecionado) {
@@ -435,7 +456,13 @@ export const useAgendamentos = () => {
         console.log('✅ Atualizado com sucesso');
         
         const evento = new CustomEvent('agendamentoAtualizado', { 
-          detail: { tipo: 'edicao', agendamento: agendamentoData }
+          detail: { 
+            tipo: 'edicao', 
+            agendamento: agendamentoData,
+            valor_personalizado: valorPersonalizado,
+            valor_original: valorOriginalServico,
+            valor_final: valorFinal
+          }
         });
         window.dispatchEvent(evento);
         
@@ -451,7 +478,8 @@ export const useAgendamentos = () => {
               funcionarioId: profissional.id,
               funcionario: profissional.nome,
               data: formData.data,
-              valor: servico.preco,
+              valor: valorFinal,
+              valor_original: valorOriginalServico,
               servico: servico.nome,
               comissao: valorComissao
             }
