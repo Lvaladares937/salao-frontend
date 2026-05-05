@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Clock, Plus, ChevronLeft, ChevronRight, User } from 'lucide-react';
-import { isSameDay } from 'date-fns';
+import { Clock, Plus, ChevronLeft, ChevronRight, User, AlertCircle, AlertTriangle } from 'lucide-react';
+import { isSameDay, format } from 'date-fns';
 import { getStatusColor } from './helpers';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,13 +9,11 @@ import { useAuth } from '../../contexts/AuthContext';
 const extrairHoraCorreta = (dataHoraStr) => {
   if (!dataHoraStr) return null;
   
-  // Formato ISO "2026-03-27T13:30:00.000Z"
   const match = dataHoraStr.match(/T(\d{2}):(\d{2})/);
   if (match) {
     let horaUTC = parseInt(match[1]);
     let minuto = parseInt(match[2]);
     
-    // Converter UTC para horário de Brasília (UTC-3)
     let horaLocal = horaUTC - 3;
     if (horaLocal < 0) {
       horaLocal = horaLocal + 24;
@@ -25,6 +23,146 @@ const extrairHoraCorreta = (dataHoraStr) => {
   }
   
   return null;
+};
+
+// 🔥 FUNÇÃO PARA CONVERTER HORA STRING PARA MINUTOS
+const horaParaMinutos = (horaStr) => {
+  const [hora, minuto] = horaStr.split(':').map(Number);
+  return hora * 60 + minuto;
+};
+
+// 🔥 FUNÇÃO PARA FORMATAR DURAÇÃO
+const formatarDuracao = (minutos) => {
+  if (!minutos || minutos <= 0) return 'N/A';
+  const horas = Math.floor(minutos / 60);
+  const mins = minutos % 60;
+  if (horas === 0) return `${mins}min`;
+  if (mins === 0) return `${horas}h`;
+  return `${horas}h${mins}`;
+};
+
+// 🔥 FUNÇÃO PARA FORMATAR DATA
+const formatarData = (dataStr) => {
+  if (!dataStr) return '';
+  const data = new Date(dataStr);
+  return format(data, 'dd/MM/yyyy');
+};
+
+// 🔥 FUNÇÃO PARA CORES BASEADAS NA DURAÇÃO
+const getDuracaoColors = (duracaoMinutos) => {
+  if (!duracaoMinutos) return { 
+    bg: 'bg-blue-500', 
+    bgLight: 'bg-blue-100', 
+    border: 'border-blue-500', 
+    text: 'text-blue-700',
+    gradient: 'from-blue-400 to-indigo-500',
+    icon: '🔵'
+  };
+  
+  if (duracaoMinutos <= 30) {
+    return { 
+      bg: 'bg-emerald-500', 
+      bgLight: 'bg-emerald-100', 
+      border: 'border-emerald-500', 
+      text: 'text-emerald-700',
+      gradient: 'from-emerald-400 to-green-500',
+      icon: '🟢',
+      label: 'Rápido'
+    };
+  } else if (duracaoMinutos <= 60) {
+    return { 
+      bg: 'bg-blue-500', 
+      bgLight: 'bg-blue-100', 
+      border: 'border-blue-500', 
+      text: 'text-blue-700',
+      gradient: 'from-blue-400 to-indigo-500',
+      icon: '🔵',
+      label: 'Médio'
+    };
+  } else if (duracaoMinutos <= 90) {
+    return { 
+      bg: 'bg-yellow-500', 
+      bgLight: 'bg-yellow-100', 
+      border: 'border-yellow-500', 
+      text: 'text-yellow-700',
+      gradient: 'from-yellow-400 to-amber-500',
+      icon: '🟡',
+      label: 'Longo'
+    };
+  } else if (duracaoMinutos <= 120) {
+    return { 
+      bg: 'bg-orange-500', 
+      bgLight: 'bg-orange-100', 
+      border: 'border-orange-500', 
+      text: 'text-orange-700',
+      gradient: 'from-orange-400 to-red-500',
+      icon: '🟠',
+      label: 'Muito Longo'
+    };
+  } else {
+    return { 
+      bg: 'bg-red-500', 
+      bgLight: 'bg-red-100', 
+      border: 'border-red-500', 
+      text: 'text-red-700',
+      gradient: 'from-red-400 to-rose-600',
+      icon: '🔴',
+      label: 'Extenso'
+    };
+  }
+};
+
+// 🔥 COMPONENTE DE MODAL DE CONFIRMAÇÃO - CORRIGIDO PARA MOSTRAR A DATA
+const ModalConfirmacaoSobreposicao = ({ show, onConfirm, onCancel, agendamentoConflitante, novoHorario, dataSelecionada }) => {
+  if (!show) return null;
+  
+  const dataFormatada = formatarData(dataSelecionada);
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+        <div className="flex items-center gap-3 text-yellow-600 mb-4">
+          <AlertTriangle className="w-8 h-8" />
+          <h3 className="text-lg font-semibold">Conflito de Horário</h3>
+        </div>
+        
+        <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+          <p className="text-sm text-gray-700 mb-2">
+            Este horário está dentro do atendimento de:
+          </p>
+          <p className="font-medium text-gray-900">
+            {agendamentoConflitante?.cliente_nome || 'Cliente'}
+          </p>
+          <p className="text-sm text-gray-600">
+            {agendamentoConflitante?.servico_nome} - {formatarDuracao(agendamentoConflitante?.servico_duracao)}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Data: {dataFormatada} | Horário: {agendamentoConflitante?.horaInicio} até {agendamentoConflitante?.horaFim}
+          </p>
+        </div>
+        
+        <p className="text-sm text-gray-600 mb-4">
+          Deseja <strong>forçar</strong> o agendamento para <strong>{dataFormatada} às {novoHorario}</strong> mesmo assim?
+          Isso pode causar sobreposição de atendimentos.
+        </p>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+          >
+            Forçar Agendamento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const TimelineAgendamentos = ({ 
@@ -46,26 +184,26 @@ const TimelineAgendamentos = ({
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
   
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingAgendamento, setPendingAgendamento] = useState(null);
+  const [agendamentoConflitante, setAgendamentoConflitante] = useState(null);
+  
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
-// 🔥 FUNÇÃO PARA ORDENAR PROFISSIONAL NA ORDEM DESEJADA
-const ordenarProfissionais = (lista) => {
-  // 🔥 ORDEM PERSONALIZADA - Vailson (18 e 7) primeiros
-  const ordemDesejada = [18, 17, 15, 13, 16, 14, 3, 8, 4, 3, 2, 11, 1, 5, 6, 9, 10];
-  
-  return [...lista].sort((a, b) => {
-    const indexA = ordemDesejada.indexOf(a.id);
-    const indexB = ordemDesejada.indexOf(b.id);
+  const ordenarProfissionais = (lista) => {
+    const ordemDesejada = [7, 8, 4, 3, 2, 5, 9, 6, 1, 10];
     
-    // Se o ID não estiver na lista, coloca no final
-    if (indexA === -1 && indexB === -1) return a.nome.localeCompare(b.nome);
-    if (indexA === -1) return 1;
-    if (indexB === -1) return -1;
-    return indexA - indexB;
-  });
-};
+    return [...lista].sort((a, b) => {
+      const indexA = ordemDesejada.indexOf(a.id);
+      const indexB = ordemDesejada.indexOf(b.id);
+      
+      if (indexA === -1 && indexB === -1) return a.nome.localeCompare(b.nome);
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+  };
 
-  // FILTRO DE PROFISSIONAIS (COM ORDENAÇÃO)
   const profissionaisFiltrados = React.useMemo(() => {
     if (!profissionais) return [];
     
@@ -75,7 +213,6 @@ const ordenarProfissionais = (lista) => {
       lista = lista.filter(prof => prof.id === usuario.funcionarioId);
     }
     
-    // 🔥 APLICAR ORDENAÇÃO (apenas se não for funcionário, senão só 1 profissional)
     if (!isFuncionario) {
       lista = ordenarProfissionais(lista);
     }
@@ -83,28 +220,6 @@ const ordenarProfissionais = (lista) => {
     return lista;
   }, [profissionais, isFuncionario, usuario]);
 
-  // Aplicar filtros nos agendamentos
-  const agendamentosFiltrados = React.useMemo(() => {
-    if (!agendamentos) return [];
-    
-    return agendamentos.filter(ag => {
-      if (!isSameDay(new Date(ag.data_hora), dataSelecionada)) return false;
-      
-      if (isFuncionario && usuario?.funcionarioId) {
-        return ag.funcionario_id === usuario.funcionarioId;
-      }
-      
-      if (filtroProfissional && filtroProfissional !== 'todos') {
-        if (ag.funcionario_id !== parseInt(filtroProfissional)) return false;
-      }
-      if (filtroServico && filtroServico !== 'todos') {
-        if (ag.servico_id !== parseInt(filtroServico)) return false;
-      }
-      return true;
-    });
-  }, [agendamentos, dataSelecionada, isFuncionario, usuario, filtroProfissional, filtroServico]);
-
-  // Usar horários das configurações ou fallback
   const horarios = React.useMemo(() => {
     if (loading || !horariosDisponiveis?.length) {
       return ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', 
@@ -114,7 +229,107 @@ const ordenarProfissionais = (lista) => {
     return horariosDisponiveis;
   }, [horariosDisponiveis, loading]);
 
-  // Função para formatar valor
+  const getAgendamentosPorProfissional = React.useMemo(() => {
+    const mapa = new Map();
+    
+    if (!agendamentos) return mapa;
+    
+    agendamentos.forEach(ag => {
+      if (!isSameDay(new Date(ag.data_hora), dataSelecionada)) return;
+      
+      if (filtroProfissional && filtroProfissional !== 'todos') {
+        if (ag.funcionario_id !== parseInt(filtroProfissional)) return;
+      }
+      if (filtroServico && filtroServico !== 'todos') {
+        if (ag.servico_id !== parseInt(filtroServico)) return;
+      }
+      if (isFuncionario && usuario?.funcionarioId) {
+        if (ag.funcionario_id !== usuario.funcionarioId) return;
+      }
+      
+      const horaInicio = extrairHoraCorreta(ag.data_hora);
+      if (!horaInicio) return;
+      
+      const duracao = ag.servico_duracao || 60;
+      const horaInicioMinutos = horaParaMinutos(horaInicio);
+      const horaFimMinutos = horaInicioMinutos + duracao;
+      
+      const horaFimHoras = Math.floor(horaFimMinutos / 60);
+      const horaFimMin = horaFimMinutos % 60;
+      const horaFim = `${horaFimHoras.toString().padStart(2, '0')}:${horaFimMin.toString().padStart(2, '0')}`;
+      
+      if (!mapa.has(ag.funcionario_id)) {
+        mapa.set(ag.funcionario_id, []);
+      }
+      
+      mapa.get(ag.funcionario_id).push({
+        ...ag,
+        horaInicio,
+        horaFim,
+        horaInicioMinutos,
+        horaFimMinutos,
+        duracao
+      });
+    });
+    
+    return mapa;
+  }, [agendamentos, dataSelecionada, filtroProfissional, filtroServico, isFuncionario, usuario]);
+
+  const getAgendamentoNoHorario = (profissionalId, horario) => {
+    const agendamentosProf = getAgendamentosPorProfissional.get(profissionalId) || [];
+    const horarioMinutos = horaParaMinutos(horario);
+    
+    return agendamentosProf.find(ag => {
+      return horarioMinutos >= ag.horaInicioMinutos && horarioMinutos < ag.horaFimMinutos;
+    });
+  };
+
+  const isPrimeiroHorario = (profissionalId, horario) => {
+    const agendamento = getAgendamentoNoHorario(profissionalId, horario);
+    if (!agendamento) return false;
+    
+    return horario === agendamento.horaInicio;
+  };
+
+  // 🔥 FUNÇÃO PARA QUANDO CLICAR NO BOTÃO AGENDAR
+  const handleAgendarClick = (profissionalId, horario) => {
+    const agendamentoConflito = getAgendamentoNoHorario(profissionalId, horario);
+    
+    if (agendamentoConflito) {
+      // 🔥 MOSTRA MODAL DE CONFIRMAÇÃO
+      setAgendamentoConflitante(agendamentoConflito);
+      setPendingAgendamento({ profissionalId, horario });
+      setShowConfirmModal(true);
+    } else {
+      // 🔥 CORREÇÃO: Só passa profissionalId e horario (sem a data)
+      console.log('🕐 CLIQUE NORMAL - HORÁRIO:', horario);
+      onNovo?.(profissionalId, horario);
+    }
+  };
+
+  // 🔥 CONFIRMAR FORÇAR AGENDAMENTO - CORREÇÃO FINAL
+  const handleConfirmForcarAgendamento = () => {
+    if (pendingAgendamento) {
+      console.log('⚠️ FORÇANDO AGENDAMENTO - HORÁRIO:', pendingAgendamento.horario);
+      
+      // 🔥 CORREÇÃO: Só passa profissionalId e horario (sem a data)
+      // A data já está no estado do componente pai (dataSelecionada)
+      onNovo?.(
+        pendingAgendamento.profissionalId, 
+        pendingAgendamento.horario
+      );
+    }
+    setShowConfirmModal(false);
+    setPendingAgendamento(null);
+    setAgendamentoConflitante(null);
+  };
+
+  const handleCancelForcarAgendamento = () => {
+    setShowConfirmModal(false);
+    setPendingAgendamento(null);
+    setAgendamentoConflitante(null);
+  };
+
   const formatarValor = (valor) => {
     if (valor === null || valor === undefined) return '0,00';
     const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
@@ -122,7 +337,7 @@ const ordenarProfissionais = (lista) => {
     return numero.toFixed(2).replace('.', ',');
   };
 
-  // Funções de scroll
+  // Funções de scroll (mantidas iguais)
   const checkScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -186,7 +401,7 @@ const ordenarProfissionais = (lista) => {
     }
   };
 
-  const larguraMinimaColuna = 280;
+  const larguraMinimaColuna = 320;
   const larguraTotal = profissionaisFiltrados.length * larguraMinimaColuna + 100;
 
   if (!profissionaisFiltrados || profissionaisFiltrados.length === 0) {
@@ -203,164 +418,258 @@ const ordenarProfissionais = (lista) => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden relative">
-      {profissionaisFiltrados.length > 1 && showLeftArrow && (
-        <button
-          onClick={scrollLeftHandler}
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 z-20 bg-white rounded-full shadow-lg p-2 hover:bg-gray-50 transition-all border border-gray-200 ml-2"
-          style={{ marginTop: '-20px' }}
-        >
-          <ChevronLeft className="w-5 h-5 text-gray-600" />
-        </button>
-      )}
-      
-      {profissionaisFiltrados.length > 1 && showRightArrow && (
-        <button
-          onClick={scrollRightHandler}
-          className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 bg-white rounded-full shadow-lg p-2 hover:bg-gray-50 transition-all border border-gray-200 mr-2"
-          style={{ marginTop: '-20px' }}
-        >
-          <ChevronRight className="w-5 h-5 text-gray-600" />
-        </button>
-      )}
-
-      <div 
-        ref={scrollContainerRef}
-        className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 cursor-grab active:cursor-grabbing"
-        onScroll={checkScroll}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        style={{ 
-          scrollBehavior: isDragging ? 'auto' : 'smooth',
-          userSelect: 'none'
-        }}
-      >
-        <div style={{ minWidth: `${larguraTotal}px` }}>
-          {/* Cabeçalho dos profissionais (já na ordem correta) */}
-          <div 
-            className="grid bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 sticky top-0"
-            style={{ 
-              gridTemplateColumns: `100px repeat(${profissionaisFiltrados.length}, minmax(${larguraMinimaColuna}px, 1fr))` 
-            }}
+    <>
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden relative">
+        {profissionaisFiltrados.length > 1 && showLeftArrow && (
+          <button
+            onClick={scrollLeftHandler}
+            className="absolute left-0 top-1/2 transform -translate-y-1/2 z-20 bg-white rounded-full shadow-lg p-2 hover:bg-gray-50 transition-all border border-gray-200 ml-2"
+            style={{ marginTop: '-20px' }}
           >
-            <div className="p-4 font-medium text-gray-600 sticky left-0 bg-gradient-to-r from-gray-50 to-white z-10 border-r border-gray-200">
-              Horário
-            </div>
-            {profissionaisFiltrados.map(prof => (
-              <div 
-                key={prof.id} 
-                className="p-4 flex items-center gap-3 border-l border-gray-200 min-w-[280px] bg-white hover:bg-gray-50 transition-colors"
-                style={{ pointerEvents: 'none' }}
-              >
-                <div className={`w-10 h-10 rounded-full ${prof.cor || 'bg-blue-500'} flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm`}>
-                  {prof.avatar || prof.nome?.substring(0, 2).toUpperCase() || '??'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 truncate">{prof.nome}</p>
-                  <p className="text-xs text-gray-500 truncate flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                    {isFuncionario ? 'Você' : (prof.especialidade || 'Profissional')}
-                  </p>
-                </div>
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+        )}
+        
+        {profissionaisFiltrados.length > 1 && showRightArrow && (
+          <button
+            onClick={scrollRightHandler}
+            className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 bg-white rounded-full shadow-lg p-2 hover:bg-gray-50 transition-all border border-gray-200 mr-2"
+            style={{ marginTop: '-20px' }}
+          >
+            <ChevronRight className="w-5 h-5 text-gray-600" />
+          </button>
+        )}
+
+        <div 
+          ref={scrollContainerRef}
+          className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 cursor-grab active:cursor-grabbing"
+          onScroll={checkScroll}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          style={{ 
+            scrollBehavior: isDragging ? 'auto' : 'smooth',
+            userSelect: 'none'
+          }}
+        >
+          <div style={{ minWidth: `${larguraTotal}px` }}>
+            <div 
+              className="grid bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 sticky top-0"
+              style={{ 
+                gridTemplateColumns: `100px repeat(${profissionaisFiltrados.length}, minmax(${larguraMinimaColuna}px, 1fr))` 
+              }}
+            >
+              <div className="p-4 font-medium text-gray-600 sticky left-0 bg-gradient-to-r from-gray-50 to-white z-10 border-r border-gray-200">
+                Horário
               </div>
-            ))}
-          </div>
-
-          {/* Linhas de horário */}
-          <div className="divide-y divide-gray-100">
-            {horarios.map((hora, index) => (
-              <div 
-                key={index} 
-                className="grid hover:bg-gray-50/50 transition-colors"
-                style={{ 
-                  gridTemplateColumns: `100px repeat(${profissionaisFiltrados.length}, minmax(${larguraMinimaColuna}px, 1fr))` 
-                }}
-              >
-                <div className="p-4 text-sm font-medium text-gray-600 border-r border-gray-200 sticky left-0 bg-white z-10">
-                  {hora}
+              {profissionaisFiltrados.map(prof => (
+                <div 
+                  key={prof.id} 
+                  className="p-4 flex items-center gap-3 border-l border-gray-200 min-w-[320px] bg-white hover:bg-gray-50 transition-colors"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  <div className={`w-10 h-10 rounded-full ${prof.cor || 'bg-blue-500'} flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm`}>
+                    {prof.avatar || prof.nome?.substring(0, 2).toUpperCase() || '??'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 truncate">{prof.nome}</p>
+                    <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                      {isFuncionario ? 'Você' : (prof.especialidade || 'Profissional')}
+                    </p>
+                  </div>
                 </div>
+              ))}
+            </div>
 
-                {profissionaisFiltrados.map((prof) => {
-                  // 🔥 CORREÇÃO: Encontrar agendamento pela hora extraída (SEM CONVERSÃO)
-                  const agendamento = agendamentosFiltrados.find(ag => {
-                    if (!ag?.data_hora) return false;
-                    const horaAgendamento = extrairHoraCorreta(ag.data_hora);
-                    return ag.funcionario_id === prof.id && horaAgendamento === hora;
-                  });
+            <div className="divide-y divide-gray-100">
+              {horarios.map((hora, index) => (
+                <div 
+                  key={index} 
+                  className="grid hover:bg-gray-50/50 transition-colors"
+                  style={{ 
+                    gridTemplateColumns: `100px repeat(${profissionaisFiltrados.length}, minmax(${larguraMinimaColuna}px, 1fr))` 
+                  }}
+                >
+                  <div className="p-4 text-sm font-medium text-gray-600 border-r border-gray-200 sticky left-0 bg-white z-10">
+                    {hora}
+                  </div>
 
-                  if (agendamento) {
-                    return (
-                      <div 
-                        key={prof.id}
-                        className={`
-                          p-3 border-l border-gray-200 cursor-pointer min-w-[280px] transition-all
-                          ${getStatusColor(agendamento.status)}
-                          hover:shadow-md hover:scale-[1.02] hover:z-20 relative
-                        `}
-                        onClick={() => onEditar?.(agendamento)}
-                        style={{ pointerEvents: 'auto' }}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-sm truncate">
-                              {agendamento.cliente_nome || 'Cliente'}
-                            </p>
-                            <p className="text-xs mt-1 text-gray-600 truncate">
-                              {agendamento.servico_nome || 'Serviço'}
-                            </p>
-                            <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
-                              <Clock className="w-3 h-3 flex-shrink-0" />
-                              <span className="truncate">
-                                {agendamento.servico_duracao || 30}min
-                              </span>
+                  {profissionaisFiltrados.map((prof) => {
+                    const agendamento = getAgendamentoNoHorario(prof.id, hora);
+                    const isPrimeiro = isPrimeiroHorario(prof.id, hora);
+                    
+                    if (agendamento) {
+                      const duracao = agendamento.duracao;
+                      const coresStatus = getStatusColor(agendamento.status);
+                      const coresDuracao = getDuracaoColors(duracao);
+                      
+                      if (isPrimeiro) {
+                        return (
+                          <div 
+                            key={prof.id}
+                            className={`
+                              p-3 border-l border-gray-200 cursor-pointer min-w-[320px] transition-all relative overflow-hidden
+                              ${coresStatus}
+                              hover:shadow-lg hover:scale-[1.02] hover:z-20
+                            `}
+                            onClick={() => onEditar?.(agendamento)}
+                            style={{ pointerEvents: 'auto' }}
+                          >
+                            <div className={`absolute top-0 right-0 w-full h-1 bg-gradient-to-r ${coresDuracao.gradient}`} />
+                            
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-lg">{coresDuracao.icon}</span>
+                                  <p className="font-semibold text-sm truncate">
+                                    {agendamento.cliente_nome || 'Cliente'}
+                                  </p>
+                                </div>
+                                
+                                <p className="text-xs mt-1 text-gray-600 truncate font-medium">
+                                  {agendamento.servico_nome || 'Serviço'}
+                                </p>
+                                
+                                <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-white bg-opacity-60">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{formatarDuracao(duracao)}</span>
+                                </div>
+                                
+                                <div className="mt-1 text-xs text-gray-400 flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3" />
+                                  <span>Clique para editar</span>
+                                </div>
+                              </div>
+                              
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-xs bg-white bg-opacity-70 px-2 py-1 rounded-full font-bold shadow-sm">
+                                  R$ {formatarValor(agendamento.valor)}
+                                </span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full bg-white bg-opacity-60 ${coresDuracao.text}`}>
+                                  {coresDuracao.label}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                          <span className="text-xs bg-white bg-opacity-50 px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 font-medium shadow-sm">
-                            R$ {formatarValor(agendamento.valor)}
+                        );
+                      } else {
+                        return (
+                          <div 
+                            key={prof.id}
+                            className={`
+                              border-l border-gray-200 min-w-[320px] transition-all relative
+                              ${coresStatus}
+                              group
+                            `}
+                            style={{ 
+                              pointerEvents: 'auto',
+                              height: '100%',
+                              minHeight: '80px'
+                            }}
+                          >
+                            <div className={`absolute inset-0 bg-gradient-to-r ${coresDuracao.gradient} opacity-20`} />
+                            
+                            <div 
+                              className="relative h-full flex items-center justify-center cursor-pointer z-10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAgendarClick(prof.id, hora);
+                              }}
+                            >
+                              <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button className="bg-yellow-500 text-white p-2 rounded-full shadow-lg hover:bg-yellow-600 transition-all transform hover:scale-110">
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                                <span className="text-xs font-medium text-yellow-700 bg-white px-2 py-0.5 rounded-full shadow">
+                                  Forçar Agendamento
+                                </span>
+                              </div>
+                              <div className="absolute inset-0 flex items-center justify-center opacity-100 group-hover:opacity-0 transition-opacity">
+                                <div className="text-xs text-gray-500 flex flex-col items-center gap-1">
+                                  <Clock className="w-4 h-4 opacity-50" />
+                                  <span className="text-[10px]">Ocupado</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                    }
+
+                    return (
+                      <div 
+                        key={prof.id} 
+                        className="p-4 border-l border-gray-200 cursor-pointer hover:bg-gray-100 transition-all min-w-[320px] group relative"
+                        onClick={() => handleAgendarClick(prof.id, hora)}
+                        style={{ pointerEvents: 'auto' }}
+                      >
+                        <div className="h-full flex flex-col items-center justify-center gap-2">
+                          <button className="text-gray-300 group-hover:text-blue-600 transition-all transform group-hover:scale-110">
+                            <Plus className="w-6 h-6" />
+                          </button>
+                          <span className="text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                            Agendar
                           </span>
                         </div>
                       </div>
                     );
-                  }
-
-                  return (
-                    <div 
-                      key={prof.id} 
-                      className="p-4 border-l border-gray-200 cursor-pointer hover:bg-gray-100 transition-all min-w-[280px] group"
-                      onClick={() => {
-                        console.log('🕐 CLIQUE NO TIMELINE - HORÁRIO:', hora);
-                        onNovo?.(prof.id, hora);
-                      }}
-                      style={{ pointerEvents: 'auto' }}
-                    >
-                      <div className="h-full flex items-center justify-center">
-                        <button className="text-gray-300 group-hover:text-blue-600 transition-all transform group-hover:scale-110">
-                          <Plus className="w-6 h-6" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        <div className="border-t border-gray-200 bg-gray-50 p-3">
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
+            <span className="font-medium text-gray-700">Duração dos Serviços:</span>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+              <span className="text-gray-600">≤30min (Rápido)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+              <span className="text-gray-600">31-60min (Médio)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <span className="text-gray-600">61-90min (Longo)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+              <span className="text-gray-600">91-120min (Muito Longo)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <span className="text-gray-600">120min+ (Extenso)</span>
+            </div>
+          </div>
+        </div>
+
+        {profissionaisFiltrados.length > 1 && (
+          <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 bg-gray-50/50">
+            ← Arraste para o lado para ver mais profissionais | Passe o mouse sobre horários ocupados para forçar agendamento →
+          </div>
+        )}
+
+        {isFuncionario && profissionaisFiltrados.length === 1 && (
+          <div className="text-xs text-blue-600 text-center py-2 border-t border-gray-100 bg-blue-50">
+            ✓ Mostrando apenas seus agendamentos
+          </div>
+        )}
       </div>
 
-      {profissionaisFiltrados.length > 1 && (
-        <div className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 bg-gray-50/50">
-          ← Arraste para o lado para ver mais profissionais (clique nos agendamentos para editar) →
-        </div>
-      )}
-
-      {isFuncionario && profissionaisFiltrados.length === 1 && (
-        <div className="text-xs text-blue-600 text-center py-2 border-t border-gray-100 bg-blue-50">
-          ✓ Mostrando apenas seus agendamentos
-        </div>
-      )}
-    </div>
+      <ModalConfirmacaoSobreposicao
+        show={showConfirmModal}
+        onConfirm={handleConfirmForcarAgendamento}
+        onCancel={handleCancelForcarAgendamento}
+        agendamentoConflitante={agendamentoConflitante}
+        novoHorario={pendingAgendamento?.horario}
+        dataSelecionada={dataSelecionada}
+      />
+    </>
   );
 };
 
