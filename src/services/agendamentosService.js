@@ -89,13 +89,14 @@ const agendamentosService = {
     }
   },
 
-  buscarPorFuncionarioPeriodo: async (funcionarioId, mes, ano) => {
+  buscarPorFuncionarioPeriodo: async (funcionarioId, mes, ano, status = null) => {
     try {
       let url = `/agendamentos/funcionario/${funcionarioId}`;
       // Só adiciona os parâmetros se eles existirem
       const params = new URLSearchParams();
       if (mes) params.append('mes', mes);
       if (ano) params.append('ano', ano);
+      if (status) params.append('status', status);  // 🔥 ADICIONADO - passa o status
       
       const queryString = params.toString();
       if (queryString) {
