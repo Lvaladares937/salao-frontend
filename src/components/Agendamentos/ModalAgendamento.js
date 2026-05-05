@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Phone, Mail, DollarSign, CreditCard, Info, Clock, Search, User, Scissors, CheckCircle, CalendarCheck, XCircle } from 'lucide-react';
+import { X, Phone, Mail, DollarSign, CreditCard, Info, Clock, Search, User, Scissors, CheckCircle, CalendarCheck, XCircle, Edit2 } from 'lucide-react';
 import { useConfiguracoesHorarios } from '../../hooks/useConfiguracoesHorarios';
 
 // 🔥 FUNÇÕES DE CORES ATUALIZADAS
@@ -98,6 +98,11 @@ const ModalAgendamento = ({
   const [pagamentoRegistrado, setPagamentoRegistrado] = useState(false);
   const [horariosDoDia, setHorariosDoDia] = useState([]);
   
+  // 🔥 NOVOS ESTADOS PARA VALOR PERSONALIZADO
+  const [valorPersonalizado, setValorPersonalizado] = useState(null);
+  const [editandoValor, setEditandoValor] = useState(false);
+  const [valorInput, setValorInput] = useState('');
+  
   // Estados para proteger os dados do clique
   const [dadosDoClique, setDadosDoClique] = useState(false);
   const [profissionalDoClique, setProfissionalDoClique] = useState(null);
@@ -172,6 +177,9 @@ const ModalAgendamento = ({
       setPagamentoRegistrado(false);
       setDadosDoClique(false);
       setProfissionalDoClique(null);
+      setValorPersonalizado(null);
+      setEditandoValor(false);
+      setValorInput('');
     }
   }, [show]);
 
@@ -198,6 +206,12 @@ const ModalAgendamento = ({
         if (servicoEncontrado) {
           setBuscaServico(servicoEncontrado.nome);
           setServicoSelecionado(servicoEncontrado);
+          // 🔥 CARREGAR O VALOR PERSONALIZADO SALVO
+          if (agendamentoSelecionado.valor_personalizado) {
+            setValorPersonalizado(agendamentoSelecionado.valor_personalizado);
+          } else {
+            setValorPersonalizado(null);
+          }
         }
       }
       
@@ -226,7 +240,6 @@ const ModalAgendamento = ({
         }
       }
       
-      // Pequeno delay para garantir que o formData está pronto
       setTimeout(() => {
         if (formData.hora !== horarioInicial) {
           console.log('⏰ Aplicando horário com delay:', horarioInicial);
@@ -331,6 +344,9 @@ const ModalAgendamento = ({
       if (servicoSelecionadoObj) {
         setBuscaServico(servicoSelecionadoObj.nome);
         setServicoSelecionado(servicoSelecionadoObj);
+        // 🔥 Resetar valor personalizado quando trocar de serviço
+        setValorPersonalizado(null);
+        setEditandoValor(false);
       }
     }
   }, [formData.servicoId, servicos, show, dadosDoClique]);
@@ -360,7 +376,7 @@ const ModalAgendamento = ({
     }
   }, [formData.profissionalId, profissionais, show, dadosDoClique, profissionalDoClique, profissionalSelecionado]);
 
-  // Calcular comissão baseada no serviço e profissional
+  // 🔥 Calcular comissão baseada no serviço e profissional (usando valor personalizado se existir)
   useEffect(() => {
     if (servicoSelecionado && profissionalSelecionado) {
       const percComissao = servicoSelecionado.comissao_percentual || 
@@ -369,13 +385,15 @@ const ModalAgendamento = ({
       
       setPercentualComissao(percComissao);
       
-      const valorComissao = (parseFloat(servicoSelecionado.preco) * percComissao) / 100;
+      // 🔥 Usa o valor personalizado se existir, senão usa o preço original
+      const valorBase = valorPersonalizado !== null ? valorPersonalizado : parseFloat(servicoSelecionado.preco);
+      const valorComissao = (valorBase * percComissao) / 100;
       setComissaoCalculada(valorComissao);
     } else {
       setComissaoCalculada(0);
       setPercentualComissao(0);
     }
-  }, [servicoSelecionado, profissionalSelecionado]);
+  }, [servicoSelecionado, profissionalSelecionado, valorPersonalizado]);
 
   // Salvar o status anterior quando o modal abrir
   useEffect(() => {
@@ -406,6 +424,9 @@ const ModalAgendamento = ({
     setFormData({ ...formData, servicoId: servico.id });
     setServicoSelecionado(servico);
     setMostrarDropdownServico(false);
+    // 🔥 Resetar valor personalizado
+    setValorPersonalizado(null);
+    setEditandoValor(false);
     
     if (dadosDoClique) {
       setDadosDoClique(false);
@@ -425,6 +446,8 @@ const ModalAgendamento = ({
     setFormData({ ...formData, servicoId: '' });
     setServicoSelecionado(null);
     setMostrarDropdownServico(false);
+    setValorPersonalizado(null);
+    setEditandoValor(false);
   };
 
   // Função para atualizar apenas o status
@@ -433,6 +456,32 @@ const ModalAgendamento = ({
       ...prev, 
       status: novoStatus
     }));
+  };
+
+  // 🔥 FUNÇÃO PARA ALTERAR O VALOR DO SERVIÇO
+  const handleAlterarValor = () => {
+    setEditandoValor(true);
+    const valorAtual = valorPersonalizado !== null ? valorPersonalizado : (servicoSelecionado?.preco || 0);
+    setValorInput(valorAtual.toString());
+  };
+
+  const handleSalvarValorPersonalizado = () => {
+    let novoValor = parseFloat(valorInput.replace(',', '.'));
+    if (isNaN(novoValor) || novoValor < 0) {
+      novoValor = servicoSelecionado?.preco || 0;
+    }
+    setValorPersonalizado(novoValor);
+    setEditandoValor(false);
+  };
+
+  const handleCancelarEdicaoValor = () => {
+    setEditandoValor(false);
+    setValorInput('');
+  };
+
+  const handleResetarValor = () => {
+    setValorPersonalizado(null);
+    setEditandoValor(false);
   };
 
   // 🔥 FUNÇÃO PARA QUANDO O USUÁRIO MUDA O PROFISSIONAL MANUALMENTE
@@ -499,35 +548,40 @@ const ModalAgendamento = ({
       return;
     }
 
+    // 🔥 PEGA O VALOR FINAL
+    const valorOriginalServico = servicoSelecionado?.preco || 0;
+    const valorFinal = valorPersonalizado !== null ? valorPersonalizado : valorOriginalServico;
+
+    // 🔥 PREPARA APENAS DADOS DE PAGAMENTO (NÃO O AGENDAMENTO COMPLETO)
     const dadosPagamento = {
       forma_pagamento: formaPagamento,
       bandeira_cartao: bandeiraCartao || null,
       parcelas: parcelas || 1,
-      valor_total: servicoSelecionado?.preco || 0,
-      valor_comissao: comissaoCalculada,
-      percentual_comissao: percentualComissao,
-      data_pagamento: new Date().toISOString()
+      data_pagamento: formData.status === 'concluido' ? new Date().toISOString() : null,
+      valor_personalizado: valorPersonalizado !== null ? valorFinal : null
     };
 
+    console.log('📤 Enviando dadosPagamento para onSalvar:', dadosPagamento);
+    
+    // 🔥 CHAMA O onSalvar APENAS COM OS DADOS DE PAGAMENTO
     await onSalvar(dadosPagamento);
 
     if (statusMudouParaConcluido) {
       const evento = new CustomEvent('agendamentoConcluido', {
         detail: {
-          agendamentoId: agendamentoSelecionado.id,
+          agendamentoId: agendamentoSelecionado?.id,
           funcionarioId: parseInt(formData.profissionalId),
           funcionarioNome: profissionalSelecionado?.nome,
           servicoNome: servicoSelecionado?.nome,
-          valor: servicoSelecionado?.preco || 0,
-          comissao: comissaoCalculada,
+          valor: valorFinal,
+          valor_original: valorOriginalServico,
+          comissao: (valorFinal * (servicoSelecionado?.comissao_percentual || 30)) / 100,
           data: formData.data,
           hora: formData.hora,
           pagamento: dadosPagamento
         }
       });
       window.dispatchEvent(evento);
-      
-      console.log('🎉 Evento agendamentoConcluido disparado!', evento.detail);
     }
 
     setMostrarPagamento(false);
@@ -536,7 +590,16 @@ const ModalAgendamento = ({
 
   // Formatar preço para exibição
   const formatarPreco = (preco) => {
+    if (preco === null || preco === undefined) return 'R$ 0,00';
     return `R$ ${parseFloat(preco).toFixed(2).replace('.', ',')}`;
+  };
+
+  // 🔥 Obter o valor atual a ser exibido (personalizado ou original)
+  const getValorExibido = () => {
+    if (valorPersonalizado !== null) {
+      return valorPersonalizado;
+    }
+    return servicoSelecionado?.preco || 0;
   };
 
   if (!show) return null;
@@ -740,9 +803,14 @@ const ModalAgendamento = ({
               <div className="mt-2 text-xs text-green-600 flex items-center gap-2">
                 <Scissors className="w-3 h-3" />
                 <span>Serviço selecionado: {buscaServico}</span>
-                <span className="text-blue-600 font-medium">
+                <span className={`font-medium ${valorPersonalizado !== null ? 'text-purple-600 line-through text-gray-400' : 'text-blue-600'}`}>
                   {formatarPreco(servicoSelecionado.preco)}
                 </span>
+                {valorPersonalizado !== null && (
+                  <span className="text-purple-600 font-bold">
+                    → {formatarPreco(valorPersonalizado)}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -770,19 +838,74 @@ const ModalAgendamento = ({
             )}
           </div>
 
-          {/* Informações de Preço e Comissão */}
+          {/* Informações de Preço e Comissão com OPÇÃO DE ALTERAR VALOR */}
           {servicoSelecionado && (
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <h3 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
-                <Info className="w-4 h-4" />
-                Informações do Serviço
-              </h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium text-blue-800 flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  Informações do Serviço
+                </h3>
+                
+                {/* 🔥 BOTÃO PARA ALTERAR VALOR */}
+                {!editandoValor ? (
+                  <button
+                    onClick={handleAlterarValor}
+                    className="flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-lg text-purple-600 hover:bg-purple-50 transition-colors"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    Alterar Valor
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleResetarValor}
+                    className="flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                    Cancelar
+                  </button>
+                )}
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600">Valor do Serviço</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {formatarPreco(servicoSelecionado.preco)}
-                  </p>
+                  {editandoValor ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-gray-600">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="input-field w-32 text-lg font-bold"
+                        value={valorInput}
+                        onChange={(e) => setValorInput(e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleSalvarValorPersonalizado}
+                        className="bg-green-500 text-white px-2 py-1 rounded text-xs"
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        onClick={handleCancelarEdicaoValor}
+                        className="bg-gray-300 px-2 py-1 rounded text-xs"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {valorPersonalizado !== null && (
+                        <p className="text-sm text-gray-400 line-through">
+                          {formatarPreco(servicoSelecionado.preco)}
+                        </p>
+                      )}
+                      <p className={`text-xl font-bold ${valorPersonalizado !== null ? 'text-purple-600' : 'text-gray-900'}`}>
+                        {formatarPreco(getValorExibido())}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Comissão ({percentualComissao}%)</p>
@@ -790,10 +913,11 @@ const ModalAgendamento = ({
                     {formatarPreco(comissaoCalculada)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    Configurado nas configurações
+                    Baseado no valor {valorPersonalizado !== null ? 'personalizado' : 'do serviço'}
                   </p>
                 </div>
               </div>
+              
               {servicoSelecionado.duracao_minutos && (
                 <div className="mt-2 pt-2 border-t border-blue-200">
                   <p className="text-sm text-gray-600 flex items-center gap-1">
@@ -940,15 +1064,21 @@ const ModalAgendamento = ({
                 <div className="flex justify-between text-sm">
                   <span>Valor Total:</span>
                   <span className="font-bold">
-                    {formatarPreco(servicoSelecionado?.preco || 0)}
+                    {formatarPreco(getValorExibido())}
                   </span>
                 </div>
                 {formaPagamento === 'credito_parcelado' && parcelas > 1 && (
                   <div className="flex justify-between text-sm mt-1 text-gray-600">
                     <span>{parcelas}x de:</span>
                     <span>
-                      {formatarPreco((parseFloat(servicoSelecionado?.preco || 0) / parcelas))}
+                      {formatarPreco(getValorExibido() / parcelas)}
                     </span>
+                  </div>
+                )}
+                {valorPersonalizado !== null && (
+                  <div className="flex justify-between text-xs mt-1 text-purple-600">
+                    <span>Valor original:</span>
+                    <span>{formatarPreco(servicoSelecionado?.preco)}</span>
                   </div>
                 )}
               </div>
