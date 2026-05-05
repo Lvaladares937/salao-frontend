@@ -205,7 +205,7 @@ const TimelineAgendamentos = ({
   const { horariosDisponiveis, loading } = useConfiguracoesHorarios();
 
   const ordenarProfissionais = (lista) => {
-    const ordemDesejada = [7, 8, 4, 3, 2, 5, 9, 6, 1, 10];
+    const ordemDesejada = [18, 8, 4, 3, 2, 5, 9, 6, 1, 10];
     
     return [...lista].sort((a, b) => {
       const indexA = ordemDesejada.indexOf(a.id);
